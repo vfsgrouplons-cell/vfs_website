@@ -281,4 +281,3 @@ TanStack Query owns server state. React Hook Form + Zod own form state/validatio
 ## 13. Definition of done for every phase
 
 At phase start, record modules/files, schema changes, routes, security controls, and acceptance tests. At phase end, run lint, unit/integration tests, production builds, authorization review, responsive review, and accessibility review; fix findings; record limitations and next-phase prerequisites. A UI action is not complete until its authenticated/authorized API, persistence, validation, error state, audit needs, and test coverage are addressed.
-

@@ -1,0 +1,28 @@
+import request from 'supertest';
+import { describe, expect, it } from 'vitest';
+import { createApp } from '../src/app.js';
+
+describe('platform foundation', () => {
+  const app = createApp();
+
+  it('reports liveness without exposing secrets', async () => {
+    const response = await request(app).get('/api/v1/health');
+    expect(response.status).toBe(200);
+    expect(response.body.data.service).toBe('vfs-groups-api');
+    expect(JSON.stringify(response.body)).not.toContain('JWT');
+  });
+
+  it('calculates an EMI schedule through the backend', async () => {
+    const response = await request(app).post('/api/v1/tools/emi').send({ amount: 1_000_000, annualRate: 9, tenureMonths: 120, loanType: 'home' });
+    expect(response.status).toBe(200);
+    expect(response.body.data.monthlyEmi).toBeGreaterThan(0);
+    expect(response.body.data.schedule).toHaveLength(120);
+    expect(response.body.data.schedule.at(-1).balance).toBe(0);
+  });
+
+  it('rejects invalid calculator input with field errors', async () => {
+    const response = await request(app).post('/api/v1/tools/emi').send({ amount: -1, annualRate: 0, tenureMonths: 0 });
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+  });
+});
