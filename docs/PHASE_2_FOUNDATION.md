@@ -11,7 +11,7 @@ Status: complete for the scoped foundation; Phase 3 public experience has starte
 - Validated server configuration, Atlas-ready Mongoose connection, structured request IDs, CORS allowlist, Helmet, JSON limits, general and route-specific rate limits, consistent errors, and graceful shutdown.
 - Identity/RBAC foundation: users, roles, permissions, customer/contractor profiles, refresh sessions, access/refresh cookies, CSRF primitive, password hashing, permission middleware, login audit events, and transaction-backed customer registration.
 - Domain foundation: counters/public identifiers, published services, applications, status history, contact/callback queues, and immutable audit records with required indexes.
-- Provider boundary: deterministic development mocks for email, SMS, WhatsApp, payments, and AI; Cloudinary adapter activates only when its three server secrets exist, otherwise a clearly marked mock storage adapter is used.
+- Provider boundary: a deterministic development mock for email, a backend-only Gemini adapter, and Cloudinary storage that activates only when its three server secrets exist. SMS, payment processing, and WhatsApp Business integrations are intentionally out of scope; WhatsApp is a configurable contact link only.
 - Idempotent seed command for 29 permissions, nine system roles, role mappings, and all 14 required services. It seeds no testimonials, metrics, lender relationships, approvals, or financial performance.
 
 ## Database changes

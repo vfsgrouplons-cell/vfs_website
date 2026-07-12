@@ -5,7 +5,7 @@ export const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || 'http
 let csrfToken;
 api.interceptors.request.use(async (config) => {
   const method = config.method?.toLowerCase();
-  if (['post', 'put', 'patch', 'delete'].includes(method) && config.url?.includes('/auth/logout')) {
+  if (['post', 'put', 'patch', 'delete'].includes(method) && !config.url?.includes('/auth/csrf')) {
     if (!csrfToken) csrfToken = (await api.get('/auth/csrf')).data.data.csrfToken;
     config.headers['x-csrf-token'] = csrfToken;
   }

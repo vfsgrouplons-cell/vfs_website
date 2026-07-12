@@ -3,7 +3,7 @@ export const permissions = [
   ['contractors.view', 'View contractor records'], ['contractors.approve', 'Approve or reject contractors'], ['contractors.suspend', 'Suspend contractor accounts'],
   ['applications.view', 'View authorized applications'], ['applications.create', 'Create applications'], ['applications.assign', 'Assign applications'], ['applications.status.update', 'Change application status'],
   ['documents.view', 'View authorized documents'], ['documents.verify', 'Verify documents'], ['documents.reject', 'Reject documents'],
-  ['subscriptions.view', 'View subscriptions'], ['subscriptions.manage', 'Manage subscriptions'], ['payments.view', 'View payments'], ['payments.manage', 'Manage payments and refunds'],
+  ['subscriptions.view', 'View subscriptions'], ['subscriptions.manage', 'Manage subscriptions'],
   ['commissions.view', 'View commissions'], ['commissions.approve', 'Approve commissions'], ['commissions.pay', 'Record commission payments'],
   ['support.view', 'View support tickets'], ['support.manage', 'Manage support tickets'], ['content.manage', 'Manage CMS content'], ['content.publish', 'Publish CMS content'],
   ['reports.view', 'View reports'], ['reports.export', 'Export reports'], ['settings.manage', 'Manage system settings'], ['roles.manage', 'Manage roles and permissions'], ['audit.view', 'View immutable audit records'],
@@ -14,11 +14,11 @@ export const roleDefinitions = {
   admin: permissions.map(([key]) => key).filter((key) => key !== 'roles.manage'),
   'operations-manager': ['customers.view', 'customers.edit', 'contractors.view', 'contractors.approve', 'applications.view', 'applications.create', 'applications.assign', 'applications.status.update', 'documents.view', 'documents.verify', 'documents.reject', 'support.view', 'reports.view', 'reports.export'],
   'application-manager': ['customers.view', 'contractors.view', 'applications.view', 'applications.create', 'applications.assign', 'applications.status.update', 'documents.view', 'documents.verify', 'documents.reject', 'reports.view'],
-  'finance-manager': ['customers.view', 'contractors.view', 'applications.view', 'subscriptions.view', 'subscriptions.manage', 'payments.view', 'payments.manage', 'commissions.view', 'commissions.approve', 'commissions.pay', 'reports.view', 'reports.export'],
+  'finance-manager': ['customers.view', 'contractors.view', 'applications.view', 'subscriptions.view', 'subscriptions.manage', 'commissions.view', 'commissions.approve', 'commissions.pay', 'reports.view', 'reports.export'],
   'support-agent': ['customers.view', 'contractors.view', 'applications.view', 'support.view', 'support.manage'],
   'content-manager': ['content.manage', 'content.publish'],
-  contractor: ['customers.view', 'applications.view', 'applications.create', 'documents.view', 'subscriptions.view', 'payments.view', 'commissions.view', 'support.view', 'reports.view'],
-  customer: ['applications.view', 'applications.create', 'documents.view', 'subscriptions.view', 'payments.view', 'support.view'],
+  contractor: ['customers.view', 'applications.view', 'applications.create', 'documents.view', 'subscriptions.view', 'commissions.view', 'support.view', 'reports.view'],
+  customer: ['applications.view', 'applications.create', 'documents.view', 'subscriptions.view', 'support.view'],
 };
 
 const commonProcess = ['Share your requirement', 'Submit accurate information and requested documents', 'VFS Groups reviews the application for completeness', 'The application may be submitted to a relevant provider', 'Track progress and respond to additional requests'];

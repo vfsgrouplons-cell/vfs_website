@@ -25,4 +25,28 @@ describe('platform foundation', () => {
     expect(response.status).toBe(422);
     expect(response.body.error.code).toBe('VALIDATION_ERROR');
   });
+
+  it('protects role dashboards from anonymous access', async () => {
+    const response = await request(app).get('/api/v1/dashboard/admin');
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('AUTHENTICATION_REQUIRED');
+  });
+
+  it('protects loan referral data from anonymous access', async () => {
+    const response = await request(app).get('/api/v1/loan-referrals/mine');
+    expect(response.status).toBe(401);
+  });
+
+  it('validates chatbot messages before calling the provider', async () => {
+    const response = await request(app).post('/api/v1/chat/messages').send({ message: '' });
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('keeps customer, contractor, and admin login endpoints separate', async () => {
+    for (const portal of ['customer', 'contractor', 'admin']) {
+      const response = await request(app).post(`/api/v1/auth/${portal}/login`).send({ identifier: '', password: '' });
+      expect(response.status).toBe(422);
+    }
+  });
 });

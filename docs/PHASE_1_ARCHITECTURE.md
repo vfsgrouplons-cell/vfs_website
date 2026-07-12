@@ -29,7 +29,7 @@ Render / Express API /api/v1
   ├── Application layer: use-cases and transactions
   ├── Policy layer: authentication, permissions, ownership
   ├── Domain layer: services, applications, referrals, finance
-  ├── Provider layer: storage, email, SMS, WhatsApp, payments, AI
+  ├── Provider layer: storage, email, Gemini AI
   ├── Job layer: notifications, expiries, reports, webhooks
   └── Data layer: Mongoose models and indexed queries
           │
@@ -45,11 +45,11 @@ Key decisions:
 - Use access and rotating refresh JWTs in HTTP-only cookies. Store hashed refresh-token identifiers for revocation and session management.
 - Require a CSRF token on cookie-authenticated mutations in production.
 - Validate all input at route boundaries with Zod and re-check resource ownership in backend policies.
-- Treat MongoDB as the system of record. Mock adapters are permitted only for third-party delivery/storage/payment/AI in development, never as fake business data.
+- Treat MongoDB as the system of record. Mock adapters are permitted only for configured third-party delivery/storage integrations in development, never as fake business data.
 - Store sensitive media metadata and Cloudinary `public_id`; create short-lived signed delivery URLs only after authorization.
-- Use MongoDB transactions for attribution correction, status transition/history, payment/subscription activation, and commission ledger adjustments.
+- Use MongoDB transactions for registration attribution, login activity, status transition/history, subscription activation, and commission ledger adjustments.
 - Never derive dashboard figures from fixtures. Dashboard endpoints aggregate authorized MongoDB records.
-- Use configurable counters for public IDs and unique indexes for application, customer, contractor, referral, payment, and subscription identifiers.
+- Use configurable counters for public IDs and unique indexes for application, customer, contractor, loan-referral, and subscription identifiers.
 
 ## 3. Repository/module structure
 
@@ -87,7 +87,7 @@ Customer: `/customer`, `/customer/applications`, `/customer/applications/:id`, `
 
 Contractor: `/contractor`, `/contractor/referrals`, `/contractor/customers`, `/contractor/customers/:id`, `/contractor/applications`, `/contractor/applications/:id`, `/contractor/commission`, `/contractor/subscription`, `/contractor/reports`, `/contractor/support`, `/contractor/profile`.
 
-Admin: `/admin`, then domain routes for leads, applications, assignments, customers, contractors, admins, roles, permissions, plans, subscriptions, payments, invoices, refunds, commissions, rules, services, FAQs, gallery, testimonials, team, pages, banners, announcements, enquiries, callbacks, tickets, chatbot, WhatsApp, notifications, templates, reports, audit, login activity, webhooks, jobs, integrations, general settings, and security settings.
+Admin: `/admin`, then domain routes for leads, applications, assignments, customers, contractors, admins, roles, permissions, plans, subscriptions, commissions, rules, services, FAQs, gallery, testimonials, team, pages, banners, announcements, enquiries, callbacks, tickets, chatbot, notifications, templates, reports, audit, login activity, jobs, integrations, general settings, and security settings.
 
 ## 5. Primary user journeys
 
@@ -101,7 +101,7 @@ Application ID + registered mobile → rate-limited OTP challenge → OTP verifi
 
 ### Customer
 
-Register/verify → authenticated overview from aggregate API → create/resume applications → satisfy document requests → view public status history → manage subscription/payment → receive notifications → open/reply to support ticket.
+Register/verify → authenticated overview from aggregate API → create/resume applications → submit loan referrals → satisfy document requests → view public status history → manage subscription → receive notifications → open/reply to support ticket.
 
 ### Contractor
 
@@ -121,7 +121,7 @@ Collections follow the specification and are grouped by domain:
 - Application CRM: `leads`, `applications`, `application_details`, `application_assignments`, `application_status_history`, `application_notes`, `tasks`, `activity_logs`.
 - Documents: `documents`, `document_versions`, `document_requests`.
 - Referral: `referrals`, `referral_clicks`, `referral_attributions`.
-- Subscription/finance: `subscription_plans`, `plan_features`, `subscriptions`, `subscription_usage`, `payments`, `payment_transactions`, `payment_webhook_events`, `refunds`, `invoices`, `commission_rules`, `commissions`, `commission_ledger`.
+- Subscription/finance: `subscription_plans`, `plan_features`, `subscriptions`, `subscription_usage`, `commission_rules`, `commissions`, `commission_ledger`.
 - Communication: `contact_enquiries`, `callback_requests`, `support_tickets`, `support_messages`, `notifications`, `notification_templates`, `notification_deliveries`, `chat_conversations`, `chat_messages`, `chat_feedback`, `knowledge_base_articles`, `whatsapp_leads`, `whatsapp_messages`, `whatsapp_opt_ins`.
 - Platform: `audit_logs`, `integration_settings`, `system_settings`, `scheduled_job_logs`, `counters`, `idempotency_keys`.
 
@@ -144,7 +144,6 @@ erDiagram
   APPLICATION ||--o| REFERRAL_ATTRIBUTION : locks
   USER ||--o{ SUBSCRIPTION : holds
   SUBSCRIPTION }o--|| SUBSCRIPTION_PLAN : uses
-  SUBSCRIPTION ||--o{ PAYMENT : paid_by
   APPLICATION ||--o{ COMMISSION : may_trigger
   COMMISSION ||--o{ COMMISSION_LEDGER : posts
   USER ||--o{ SUPPORT_TICKET : opens
@@ -156,7 +155,7 @@ erDiagram
 Important indexes:
 
 - Unique normalized email/mobile where present; sparse indexes for optional identifiers.
-- Unique `customerId`, `contractorId`, `referralCode`, `leadId`, `applicationId`, `subscriptionId`, `paymentId`, and `commissionId`.
+- Unique `customerId`, `contractorId`, `referralCode`, `leadId`, `applicationId`, `loanReferralId`, `subscriptionId`, and `commissionId`.
 - Applications: `{customer:1, createdAt:-1}`, `{contractor:1,status:1}`, `{service:1,status:1,createdAt:-1}`.
 - Status history: `{application:1,createdAt:1}`; documents: `{application:1,type:1,status:1}`.
 - Referrals: unique locked attribution per submitted application; click analytics indexed by code/date.
@@ -178,7 +177,6 @@ All endpoints are rooted at `/api/v1`; success responses use `{ success, data, m
 | Documents | request, upload, version, signed access, verify/reject/re-upload |
 | Referrals | resolve, click, attribution, contractor analytics, audited admin correction |
 | Subscriptions | plans, current, checkout/renew/cancel, usage, protected administration |
-| Payments | intent, offline proof, provider webhooks, history, receipts/refunds |
 | Commissions | authorized list/detail, rules, verify/approve/hold/pay/reverse ledger actions |
 | Support | tickets/messages/attachments/status/assignment |
 | Communication | notifications/preferences, WhatsApp opt-in/webhooks, chatbot conversations/escalation |
@@ -196,7 +194,7 @@ Mutations that create financial records, submit applications, process webhooks, 
 | Applications | own create/view | referred/assigned create/view | manage/assign/status | finance fields | support-safe view | — | manage |
 | Documents | own upload/view | authorized upload/view | request/verify | allowed view | limited | — | manage |
 | Referral | own attribution view | own analytics | audited correction | commission view | — | — | manage |
-| Payments/commissions | own payments | own ledger | limited | manage/approve/pay | — | — | manage |
+| Commissions | — | own ledger | limited | manage/approve/pay | — | — | manage |
 | Support | own | own | view | view | manage | — | manage |
 | Content | published read | published read | read | read | read | manage/publish | manage |
 | Audit/settings/RBAC | — | — | scoped read | scoped read | — | — | permission-controlled |
@@ -223,7 +221,7 @@ TanStack Query owns server state. React Hook Form + Zod own form state/validatio
 
 ## 11. Provider contracts
 
-`StorageProvider`, `EmailProvider`, `SmsProvider`, `WhatsAppProvider`, `PaymentProvider`, and `AiProvider` expose stable server-only interfaces. Development mock providers log redacted delivery metadata and deterministic IDs; they never claim external delivery or payment. Production adapters activate only when their complete secret set is present. Startup fails in production when a required enabled provider is misconfigured.
+`StorageProvider`, `EmailProvider`, and `AiProvider` expose stable server-only interfaces. Development email/storage mocks log redacted metadata and never claim external delivery. Gemini is called only by the backend. Production adapters activate only when their complete secret set is present. Startup fails in production when a required enabled provider is misconfigured. WhatsApp is currently a frontend contact link; SMS and payment providers are removed.
 
 ## 12. Phase roadmap and gates
 
@@ -245,8 +243,8 @@ TanStack Query owns server state. React Hook Form + Zod own form state/validatio
 
 ### Phase 4 — Customer
 
-- Build: registration/verification, aggregate dashboard, applications/detail, document center, notifications, subscription/payment history, support.
-- Database/APIs: full customer, document, subscription, payment, support, notification domains.
+- Build: registration/verification, aggregate dashboard, referral activity, applications/detail, document center, notifications, subscriptions, and support.
+- Database/APIs: full customer, referral, document, subscription, support, and notification domains.
 - Security: ownership policies, signed assets, internal-note exclusion, session management.
 - Acceptance: critical journey integration/E2E tests and zero cross-customer access.
 

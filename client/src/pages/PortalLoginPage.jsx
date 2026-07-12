@@ -1,0 +1,12 @@
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { LogIn, ShieldCheck } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { Link, useNavigate } from 'react-router-dom';
+import { z } from 'zod';
+import { api, apiMessage } from '../services/api.js';
+
+const schema=z.object({identifier:z.string().min(3,'Enter your mobile number or email'),password:z.string().min(1,'Enter your password')});
+const config={customer:{title:'Customer sign in',dashboard:'/customer/dashboard',register:'/customer/sign-up'},contractor:{title:'Contractor sign in',dashboard:'/contractor/dashboard',register:'/contractor/sign-up'},admin:{title:'Admin sign in',dashboard:'/admin/dashboard'}};
+export function PortalLoginPage({portal}){const navigate=useNavigate();const queryClient=useQueryClient();const form=useForm({resolver:zodResolver(schema),defaultValues:{identifier:'',password:''}});const login=useMutation({mutationFn:async(values)=>(await api.post(`/auth/${portal}/login`,values)).data.data,onSuccess:({user})=>{queryClient.setQueryData(['session'],user);navigate(config[portal].dashboard,{replace:true})}});return <section className="auth-section"><div className="auth-aside"><ShieldCheck/><span className="eyebrow">{portal} portal</span><h1>{config[portal].title}</h1><p>Your role is verified by the backend before this workspace is opened.</p></div><form className="form-card auth-form" onSubmit={form.handleSubmit((values)=>login.mutate(values))}><div className="form-title"><LogIn/><div><h2>{config[portal].title}</h2><p>Use your registered email or mobile.</p></div></div><Field label="Email or mobile" name="identifier" form={form}/><Field label="Password" name="password" type="password" form={form}/><button className="button button-gold" disabled={login.isPending}>{login.isPending?'Signing in…':'Sign in securely'}</button>{login.isError&&<p className="form-error" role="alert">{apiMessage(login.error)}</p>}{config[portal].register&&<p>Need an account? <Link to={config[portal].register}>Register here</Link></p>}<Link className="inline-link" to="/sign-in">Choose another portal</Link></form></section>}
+function Field({label,name,type='text',form}){return <label>{label}<input type={type} autoComplete={type==='password'?'current-password':'username'} {...form.register(name)}/>{form.formState.errors[name]&&<small className="field-error">{form.formState.errors[name].message}</small>}</label>}

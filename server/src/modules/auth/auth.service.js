@@ -4,15 +4,19 @@ import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import { env } from '../../config/env.js';
 import { AuditLog } from '../../models/AuditLog.js';
+import { Contractor } from '../../models/Contractor.js';
 import { Customer } from '../../models/Customer.js';
+import { LoginActivity } from '../../models/LoginActivity.js';
 import { RefreshToken } from '../../models/RefreshToken.js';
 import { Role } from '../../models/Role.js';
 import { User } from '../../models/User.js';
+import { ADMIN_ROLES } from '../../middleware/auth.js';
 import { ApiError } from '../../utils/apiError.js';
-import { nextPublicId } from '../../utils/identifiers.js';
+import { nextPublicId, nextReferralCode } from '../../utils/identifiers.js';
 
 const hashToken = (token) => createHash('sha256').update(token).digest('hex');
 const cookieBase = () => ({ httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: env.NODE_ENV === 'production' ? 'none' : 'lax', path: '/' });
+const portalRoles = { customer: ['customer'], contractor: ['contractor'], admin: ADMIN_ROLES };
 
 function signAccess(user) { return jwt.sign({ sub: user.id, type: 'access' }, env.JWT_ACCESS_SECRET, { expiresIn: env.JWT_ACCESS_EXPIRES_IN }); }
 function signRefresh(user, family) { return jwt.sign({ sub: user.id, family, type: 'refresh' }, env.JWT_REFRESH_SECRET, { expiresIn: env.JWT_REFRESH_EXPIRES_IN }); }
@@ -24,30 +28,53 @@ async function issueSession(user, request, response, family = randomUUID()) {
   await RefreshToken.create({ user: user._id, family, tokenHash: hashToken(refreshToken), expiresAt: new Date(decoded.exp * 1000), userAgent: request.get('user-agent'), ip: request.ip });
   response.cookie('vfs_access', accessToken, { ...cookieBase(), maxAge: 15 * 60 * 1000 });
   response.cookie('vfs_refresh', refreshToken, { ...cookieBase(), maxAge: Math.max(0, decoded.exp * 1000 - Date.now()) });
+  return family;
 }
 
-export async function registerCustomer(input, request, response) {
+async function resolveReferrer(input, session) {
+  if (!input.referredByCode) return null;
+  const referrer = await User.findOne({ referralCode: input.referredByCode.toUpperCase(), status: 'active' }).session(session);
+  if (!referrer) throw new ApiError(422, 'REFERRAL_CODE_INVALID', 'The referred-by code is not valid.');
+  if (referrer.mobile === input.mobile || (input.email && referrer.email === input.email.toLowerCase())) throw new ApiError(422, 'SELF_REFERRAL_NOT_ALLOWED', 'You cannot refer your own account.');
+  return referrer;
+}
+
+async function registerAccount(input, accountType, request, response) {
   const session = await mongoose.startSession();
   let user;
   try {
     await session.withTransaction(async () => {
       const existing = await User.exists({ $or: [{ mobile: input.mobile }, ...(input.email ? [{ email: input.email }] : [])] }).session(session);
       if (existing) throw new ApiError(409, 'ACCOUNT_EXISTS', 'An account already exists for this mobile number or email.');
-      const role = await Role.findOne({ slug: 'customer' }).session(session);
+      const role = await Role.findOne({ slug: accountType }).session(session);
       if (!role) throw new ApiError(503, 'SETUP_REQUIRED', 'Application roles have not been initialized. Run the seed command.');
-      const [created] = await User.create([{ fullName: input.fullName, mobile: input.mobile, email: input.email || undefined, passwordHash: await bcrypt.hash(input.password, 12), roles: [role._id], status: 'active', mobileVerifiedAt: env.NODE_ENV === 'development' ? new Date() : undefined }], { session });
+      const referrer = await resolveReferrer(input, session);
+      const referralCode = await nextReferralCode(accountType, session);
+      const [created] = await User.create([{
+        fullName: input.fullName, mobile: input.mobile, email: input.email || undefined,
+        passwordHash: await bcrypt.hash(input.password, 12), roles: [role._id], status: 'active', referralCode,
+        referredBy: referrer?._id, referredByCode: referrer?.referralCode,
+        mobileVerifiedAt: env.NODE_ENV === 'development' ? new Date() : undefined,
+      }], { session });
       user = created;
-      await Customer.create([{ customerId: await nextPublicId('customer', session), user: user._id, city: input.city, state: input.state }], { session });
-      await AuditLog.create([{ actor: user._id, actorRoles: ['customer'], action: 'customer.registered', resourceType: 'User', resourceId: user._id, newValues: { consent: input.consent }, ip: request.ip, userAgent: request.get('user-agent'), requestId: request.id }], { session });
+      if (accountType === 'customer') {
+        await Customer.create([{ customerId: await nextPublicId('customer', session), user: user._id, city: input.city, state: input.state }], { session });
+      } else {
+        await Contractor.create([{ contractorId: await nextPublicId('contractor', session), referralCode, user: user._id, businessName: input.businessName || undefined, city: input.city, state: input.state, onboardingStatus: 'registered' }], { session });
+      }
+      await AuditLog.create([{ actor: user._id, actorRoles: [accountType], action: `${accountType}.registered`, resourceType: 'User', resourceId: user._id, newValues: { consent: input.consent, referralCode, referredByCode: referrer?.referralCode }, ip: request.ip, userAgent: request.get('user-agent'), requestId: request.id }], { session });
     });
   } finally { await session.endSession(); }
   await issueSession(user, request, response);
-  return user;
+  return User.findById(user._id).populate('roles', 'name slug');
 }
 
-export async function login(input, request, response) {
+export const registerCustomer = (input, request, response) => registerAccount(input, 'customer', request, response);
+export const registerContractor = (input, request, response) => registerAccount(input, 'contractor', request, response);
+
+export async function login(input, request, response, portal) {
   const normalized = input.identifier.toLowerCase();
-  const user = await User.findOne({ $or: [{ email: normalized }, { mobile: input.identifier }] }).select('+passwordHash +failedLoginAttempts +lockedUntil');
+  const user = await User.findOne({ $or: [{ email: normalized }, { mobile: input.identifier }] }).select('+passwordHash +failedLoginAttempts +lockedUntil').populate('roles', 'name slug');
   const valid = user && await bcrypt.compare(input.password, user.passwordHash);
   if (!valid) {
     if (user) await User.updateOne({ _id: user._id }, { $inc: { failedLoginAttempts: 1 } });
@@ -55,9 +82,21 @@ export async function login(input, request, response) {
   }
   if (user.lockedUntil && user.lockedUntil > new Date()) throw new ApiError(423, 'ACCOUNT_LOCKED', 'This account is temporarily locked.');
   if (user.status !== 'active') throw new ApiError(403, 'ACCOUNT_INACTIVE', 'This account is not active.');
-  await User.updateOne({ _id: user._id }, { $set: { failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: new Date() } });
-  await issueSession(user, request, response);
-  await AuditLog.create({ actor: user._id, action: 'auth.login.succeeded', resourceType: 'User', resourceId: user._id, ip: request.ip, userAgent: request.get('user-agent'), requestId: request.id });
+  const roleSlugs = user.roles.map((role) => role.slug);
+  if (portal && !portalRoles[portal].some((role) => roleSlugs.includes(role))) throw new ApiError(403, 'WRONG_PORTAL', `This account cannot sign in to the ${portal} portal.`);
+
+  const activityRole = portal || (roleSlugs.includes('customer') ? 'customer' : roleSlugs.includes('contractor') ? 'contractor' : roleSlugs[0]);
+  const now = new Date();
+  const family = randomUUID();
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      await User.updateOne({ _id: user._id }, { $set: { failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: now, firstLoginAt: user.firstLoginAt || now }, $inc: { successfulLoginCount: 1 } }, { session });
+      await LoginActivity.create([{ user: user._id, role: activityRole, loginAt: now, sessionFamily: family, ip: request.ip, userAgent: request.get('user-agent') }], { session });
+      await AuditLog.create([{ actor: user._id, actorRoles: roleSlugs, action: 'auth.login.succeeded', resourceType: 'User', resourceId: user._id, ip: request.ip, userAgent: request.get('user-agent'), requestId: request.id }], { session });
+    });
+  } finally { await session.endSession(); }
+  await issueSession(user, request, response, family);
   return User.findById(user._id).populate('roles', 'name slug');
 }
 
@@ -77,7 +116,7 @@ export async function refresh(request, response) {
   stored.revokedAt = new Date();
   await stored.save();
   await issueSession(user, request, response, payload.family);
-  return user;
+  return User.findById(user._id).populate('roles', 'name slug');
 }
 
 export async function logout(request, response) {

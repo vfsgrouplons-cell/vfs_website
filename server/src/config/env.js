@@ -22,12 +22,12 @@ const schema = z.object({
   CLOUDINARY_API_KEY: z.string().default(''),
   CLOUDINARY_API_SECRET: z.string().default(''),
   EMAIL_PROVIDER: z.string().default('mock'),
-  SMS_PROVIDER: z.string().default('mock'),
-  WHATSAPP_PROVIDER: z.string().default('mock'),
-  PAYMENT_PROVIDER: z.string().default('mock'),
   AI_PROVIDER: z.string().default('mock'),
+  GEMINI_API_KEY: z.string().default(''),
+  GEMINI_MODEL: z.string().default('gemini-3.5-flash'),
   INITIAL_ADMIN_NAME: z.string().default(''),
   INITIAL_ADMIN_EMAIL: z.string().default(''),
+  INITIAL_ADMIN_MOBILE: z.string().default(''),
   INITIAL_ADMIN_PASSWORD: z.string().default(''),
 });
 
@@ -39,6 +39,7 @@ if (!parsed.success) {
 if (parsed.data.NODE_ENV === 'production') {
   const required = ['MONGODB_URI', 'JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET', 'COOKIE_SECRET', 'ENCRYPTION_KEY', 'CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'];
   const missing = required.filter((key) => !process.env[key]);
+  if (parsed.data.AI_PROVIDER === 'gemini' && !parsed.data.GEMINI_API_KEY) missing.push('GEMINI_API_KEY');
   if (missing.length) throw new Error(`Missing production environment variables: ${missing.join(', ')}`);
 }
 

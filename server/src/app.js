@@ -11,6 +11,9 @@ import { requestContext } from './middleware/requestContext.js';
 import { authRouter } from './modules/auth/auth.routes.js';
 import { applicationRouter } from './modules/applications/application.routes.js';
 import { contactRouter } from './modules/contact/contact.routes.js';
+import { chatRouter } from './modules/chat/chat.routes.js';
+import { dashboardRouter } from './modules/dashboard/dashboard.routes.js';
+import { loanReferralRouter } from './modules/loanReferrals/loanReferral.routes.js';
 import { serviceRouter } from './modules/services/service.routes.js';
 import { toolRouter } from './modules/services/tool.routes.js';
 
@@ -33,6 +36,9 @@ export function createApp() {
   app.use('/api/v1/services', serviceRouter);
   app.use('/api/v1/tools', toolRouter);
   app.use('/api/v1/contact', contactRouter);
+  app.use('/api/v1/chat', chatRouter);
+  app.use('/api/v1/dashboard', dashboardRouter);
+  app.use('/api/v1/loan-referrals', loanReferralRouter);
   app.use(notFound);
   app.use(errorHandler);
   return app;

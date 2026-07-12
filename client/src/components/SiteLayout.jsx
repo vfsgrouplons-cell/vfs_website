@@ -1,6 +1,7 @@
 import { Menu, MessageCircle, X } from 'lucide-react';
 import { useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { ChatWidget } from './ChatWidget.jsx';
 
 const links = [['/', 'Home'], ['/about', 'About'], ['/services', 'Services'], ['/partner', 'Partner With Us'], ['/gallery', 'Gallery'], ['/contact', 'Contact']];
 
@@ -20,6 +21,7 @@ export function SiteLayout() {
     </header>
     <main id="main-content" key={location.pathname}><Outlet /></main>
     {whatsapp && <a className="whatsapp-fab" href={`https://wa.me/${whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent('Hello VFS Groups, I would like assistance choosing a financial service.')}`} target="_blank" rel="noreferrer" aria-label="Contact VFS Groups on WhatsApp"><MessageCircle /></a>}
+    <ChatWidget />
     <footer className="site-footer"><div className="shell footer-grid"><div><Link to="/" className="brand footer-brand"><img src="/brand/vfs-groups-logo.png" alt="" /><span>VFS Groups<small>Clarity at every step</small></span></Link><p>Application assistance and support across financial and insurance service journeys.</p></div><div><h2>Explore</h2><Link to="/services">Services</Link><Link to="/emi-calculator">EMI calculator</Link><Link to="/track">Track application</Link><Link to="/partner">Partner program</Link></div><div><h2>Company</h2><Link to="/about">About</Link><Link to="/contact">Contact</Link><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><Link to="/disclaimer">Disclaimer</Link></div></div><div className="shell footer-bottom"><p>© {new Date().getFullYear()} VFS Groups. All rights reserved.</p><p>Eligibility and approval are subject to applicable lender or provider policies.</p></div></footer>
   </div>;
 }

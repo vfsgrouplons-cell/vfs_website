@@ -21,3 +21,11 @@ export const requirePermission = (...permissions) => (request, _response, next) 
   if (!allowed) return next(new ApiError(403, 'FORBIDDEN', 'You do not have permission to perform this action.'));
   next();
 };
+
+export const requireRole = (...roles) => (request, _response, next) => {
+  const userRoles = request.user?.roles?.map((role) => role.slug) || [];
+  if (!roles.some((role) => userRoles.includes(role))) return next(new ApiError(403, 'ROLE_FORBIDDEN', 'This portal is not available for your account.'));
+  next();
+};
+
+export const ADMIN_ROLES = ['super-admin', 'admin', 'operations-manager', 'application-manager', 'finance-manager', 'support-agent', 'content-manager'];
