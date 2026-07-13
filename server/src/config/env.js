@@ -44,4 +44,14 @@ if (parsed.data.NODE_ENV === 'production') {
 }
 
 export const env = parsed.data;
-export const allowedOrigins = [env.CLIENT_URL, ...env.ADDITIONAL_ALLOWED_ORIGINS.split(',').map((value) => value.trim()).filter(Boolean)];
+const normalizeOrigin = (value) => {
+  try { return new URL(value).origin; }
+  catch { return value.trim().replace(/\/+$/, ''); }
+};
+const deployedFrontendOrigins = env.NODE_ENV === 'production' ? ['https://vfs-groups.netlify.app'] : [];
+export const allowedOrigins = [...new Set([
+  env.CLIENT_URL,
+  ...env.ADDITIONAL_ALLOWED_ORIGINS.split(',').map((value) => value.trim()).filter(Boolean),
+  ...deployedFrontendOrigins,
+].map(normalizeOrigin))];
+export const isAllowedOrigin = (origin) => !origin || allowedOrigins.includes(normalizeOrigin(origin));
