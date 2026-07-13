@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { apiMessage } from './api.js';
+import { apiMessage, resolveApiBaseUrl } from './api.js';
+
+describe('resolveApiBaseUrl', () => {
+  it('uses the same-origin Netlify proxy in production', () => {
+    expect(resolveApiBaseUrl({ isDevelopment: false, configuredUrl: 'https://different.example/api/v1' })).toBe('/api/v1');
+  });
+
+  it('allows a configured API URL during local development', () => {
+    expect(resolveApiBaseUrl({ isDevelopment: true, configuredUrl: 'http://localhost:5050/api/v1' })).toBe('http://localhost:5050/api/v1');
+  });
+});
 
 describe('apiMessage', () => {
   it('returns a safe backend error message', () => {

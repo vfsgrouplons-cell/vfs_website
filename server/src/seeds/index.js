@@ -1,4 +1,3 @@
-import bcrypt from 'bcrypt';
 import { connectDatabase, disconnectDatabase } from '../config/database.js';
 import { env } from '../config/env.js';
 import { Permission } from '../models/Permission.js';
@@ -7,6 +6,7 @@ import { Service } from '../models/Service.js';
 import { Contractor } from '../models/Contractor.js';
 import { User } from '../models/User.js';
 import { nextReferralCode } from '../utils/identifiers.js';
+import { syncInitialAdmin } from './initialAdmin.js';
 import { permissions, roleDefinitions, services } from './referenceData.js';
 
 const roleNames = { 'super-admin': 'Super Admin', admin: 'Admin', 'operations-manager': 'Operations Manager', 'application-manager': 'Application Manager', 'finance-manager': 'Finance Manager', 'support-agent': 'Support Agent', 'content-manager': 'Content Manager', contractor: 'Contractor', customer: 'Customer' };
@@ -32,10 +32,8 @@ async function seed() {
   const activeServiceSlugs = services.map((service) => service.slug);
   const archivedServices = await Service.updateMany({ slug: { $nin: activeServiceSlugs }, status: { $ne: 'archived' } }, { $set: { status: 'archived' } });
   for (const service of services) await Service.findOneAndUpdate({ slug: service.slug }, { $set: service }, { new: true, upsert: true, runValidators: true });
-  if (env.INITIAL_ADMIN_EMAIL && env.INITIAL_ADMIN_PASSWORD && env.INITIAL_ADMIN_NAME && env.INITIAL_ADMIN_MOBILE) {
-    await User.findOneAndUpdate({ email: env.INITIAL_ADMIN_EMAIL.toLowerCase() }, { $setOnInsert: { fullName: env.INITIAL_ADMIN_NAME, email: env.INITIAL_ADMIN_EMAIL.toLowerCase(), mobile: env.INITIAL_ADMIN_MOBILE, passwordHash: await bcrypt.hash(env.INITIAL_ADMIN_PASSWORD, 12), roles: [roleDocs['super-admin']._id], status: 'active', emailVerifiedAt: new Date(), mobileVerifiedAt: new Date() } }, { upsert: true });
-  }
-  console.info(`Seeded ${permissions.length} permissions, ${Object.keys(roleDefinitions).length} roles, ${services.length} services, archived ${archivedServices.modifiedCount} retired services, and initialized ${usersWithoutCodes.length} referral codes.`);
+  const initialAdmin = await syncInitialAdmin(env, roleDocs['super-admin']);
+  console.info(`Seeded ${permissions.length} permissions, ${Object.keys(roleDefinitions).length} roles, ${services.length} services, archived ${archivedServices.modifiedCount} retired services, initialized ${usersWithoutCodes.length} referral codes, and admin status is ${initialAdmin.status}.`);
 }
 
 seed().then(disconnectDatabase).catch(async (error) => { console.error(error); await disconnectDatabase(); process.exit(1); });

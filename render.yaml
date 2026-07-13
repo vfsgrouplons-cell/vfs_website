@@ -21,3 +21,11 @@ services:
         generateValue: true
       - key: ENCRYPTION_KEY
         sync: false
+      - key: INITIAL_ADMIN_NAME
+        sync: false
+      - key: INITIAL_ADMIN_EMAIL
+        sync: false
+      - key: INITIAL_ADMIN_MOBILE
+        sync: false
+      - key: INITIAL_ADMIN_PASSWORD
+        sync: false
