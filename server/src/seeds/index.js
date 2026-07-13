@@ -29,11 +29,13 @@ async function seed() {
     await User.updateOne({ _id: user._id, referralCode: { $exists: false } }, { $set: { referralCode: code } });
     if (accountType === 'contractor') await Contractor.updateOne({ user: user._id }, { $set: { referralCode: code } });
   }
+  const activeServiceSlugs = services.map((service) => service.slug);
+  const archivedServices = await Service.updateMany({ slug: { $nin: activeServiceSlugs }, status: { $ne: 'archived' } }, { $set: { status: 'archived' } });
   for (const service of services) await Service.findOneAndUpdate({ slug: service.slug }, { $set: service }, { new: true, upsert: true, runValidators: true });
   if (env.INITIAL_ADMIN_EMAIL && env.INITIAL_ADMIN_PASSWORD && env.INITIAL_ADMIN_NAME && env.INITIAL_ADMIN_MOBILE) {
     await User.findOneAndUpdate({ email: env.INITIAL_ADMIN_EMAIL.toLowerCase() }, { $setOnInsert: { fullName: env.INITIAL_ADMIN_NAME, email: env.INITIAL_ADMIN_EMAIL.toLowerCase(), mobile: env.INITIAL_ADMIN_MOBILE, passwordHash: await bcrypt.hash(env.INITIAL_ADMIN_PASSWORD, 12), roles: [roleDocs['super-admin']._id], status: 'active', emailVerifiedAt: new Date(), mobileVerifiedAt: new Date() } }, { upsert: true });
   }
-  console.info(`Seeded ${permissions.length} permissions, ${Object.keys(roleDefinitions).length} roles, ${services.length} services, and initialized ${usersWithoutCodes.length} referral codes.`);
+  console.info(`Seeded ${permissions.length} permissions, ${Object.keys(roleDefinitions).length} roles, ${services.length} services, archived ${archivedServices.modifiedCount} retired services, and initialized ${usersWithoutCodes.length} referral codes.`);
 }
 
 seed().then(disconnectDatabase).catch(async (error) => { console.error(error); await disconnectDatabase(); process.exit(1); });

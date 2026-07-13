@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch src/server.js",
+    "prestart": "npm run seed",
     "start": "node src/server.js",
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run",

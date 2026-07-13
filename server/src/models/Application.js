@@ -6,7 +6,7 @@ const schema = new mongoose.Schema({
   customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', index: true }, contractor: { type: mongoose.Schema.Types.ObjectId, ref: 'Contractor', index: true },
   service: { type: mongoose.Schema.Types.ObjectId, ref: 'Service', required: true, index: true }, status: { type: String, enum: APPLICATION_STATUSES, default: 'draft', index: true },
   personal: { fullName: String, mobile: String, email: String, dateOfBirth: Date, city: String, state: String, pinCode: String },
-  financial: { employmentType: String, employerOrBusinessName: String, monthlyIncome: Number, annualTurnover: Number, existingEmi: Number, requestedAmount: Number },
+  financial: { employmentType: String, employerOrBusinessName: String, monthlyIncome: Number, annualTurnover: Number, existingEmi: Number, requestedAmount: Number, itrStatus: String, creditProfile: String },
   serviceSpecific: mongoose.Schema.Types.Mixed,
   referralCode: { type: String, uppercase: true, trim: true }, referralLockedAt: Date,
   consents: { privacy: Boolean, communication: Boolean, accuracy: Boolean, terms: Boolean, capturedAt: Date, ip: String, userAgent: String },
