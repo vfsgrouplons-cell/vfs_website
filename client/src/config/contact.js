@@ -1,6 +1,6 @@
 export const officialWhatsApp = {
-  display: '+91 86395 47157',
-  number: '918639547157',
+  display: '+91 91603 53295',
+  number: '919160353295',
 };
 
 export function createWhatsAppUrl(message) {
