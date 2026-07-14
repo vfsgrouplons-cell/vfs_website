@@ -34,9 +34,13 @@ services:
       - key: MOCK_OTP_DISPLAY
         value: true
       - key: AI_PROVIDER
-        value: mock
+        value: gemini
       - key: GEMINI_API_KEY
         sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash
+      - key: GEMINI_FALLBACK_MODEL
+        value: gemini-3.1-flash-lite
       - key: INITIAL_ADMIN_NAME
         sync: false
       - key: INITIAL_ADMIN_EMAIL

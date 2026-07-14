@@ -27,6 +27,7 @@ const schema = z.object({
   AI_PROVIDER: z.string().default('mock'),
   GEMINI_API_KEY: z.string().default(''),
   GEMINI_MODEL: z.string().default('gemini-3.5-flash'),
+  GEMINI_FALLBACK_MODEL: z.string().default('gemini-3.1-flash-lite'),
   INITIAL_ADMIN_NAME: z.string().default(''),
   INITIAL_ADMIN_EMAIL: z.string().default(''),
   INITIAL_ADMIN_MOBILE: z.string().default(''),
