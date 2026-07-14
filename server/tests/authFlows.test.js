@@ -51,6 +51,13 @@ describe('portal authentication flows', () => {
     const dashboard = await browser.get(`/api/v1/dashboard/${portal}`);
     expect(dashboard.status).toBe(200);
     expect(dashboard.body.data.user.fullName).toBe(registration.fullName);
+
+    for (const collection of ['referred-users', 'service-referrals', 'login-activity']) {
+      const page = await browser.get(`/api/v1/dashboard/${portal}/${collection}?page=1&limit=10`);
+      expect(page.status).toBe(200);
+      expect(page.body.meta).toMatchObject({ page: 1, limit: 10 });
+      expect(Array.isArray(page.body.data)).toBe(true);
+    }
   }, 15_000);
 
   it('creates and synchronizes the environment-configured administrator credentials', async () => {
@@ -88,6 +95,15 @@ describe('portal authentication flows', () => {
     });
     expect(submitted.status).toBe(201);
     expect(await Application.countDocuments()).toBe(1);
+
+    const adminRole = await Role.findOne({ slug: 'super-admin' });
+    const adminConfig = { INITIAL_ADMIN_NAME: 'Application Admin', INITIAL_ADMIN_EMAIL: 'applications@example.com', INITIAL_ADMIN_MOBILE: '919100000088', INITIAL_ADMIN_PASSWORD: 'ApplicationAdmin123' };
+    await syncInitialAdmin(adminConfig, adminRole);
+    const adminBrowser = request.agent(app);
+    expect((await adminBrowser.post('/api/v1/auth/admin/login').send({ identifier: adminConfig.INITIAL_ADMIN_EMAIL, password: adminConfig.INITIAL_ADMIN_PASSWORD })).status).toBe(200);
+    const adminApplications = await adminBrowser.get('/api/v1/dashboard/admin/applications?page=1&limit=25');
+    expect(adminApplications.status).toBe(200);
+    expect(adminApplications.body.data.map((item) => item.applicationId)).toContain(submitted.body.data.applicationId);
 
     const challenge = await browser.post('/api/v1/applications/public/track/request').send({ applicationId: submitted.body.data.applicationId, mobile: '919100000099' });
     expect(challenge.status).toBe(202);

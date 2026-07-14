@@ -22,9 +22,9 @@ dashboardRouter.use(requireAuth);
 async function memberDashboard(userId) {
   const [user, referredUsers, recentLogins, loanReferrals, referredCount, loanReferralCount] = await Promise.all([
     User.findById(userId).populate('roles', 'name slug').populate('referredBy', 'fullName referralCode').lean(),
-    User.find({ referredBy: userId }).select('fullName email mobile referralCode referredByCode createdAt roles').populate('roles', 'name slug').sort({ createdAt: -1 }).limit(100).lean(),
-    LoginActivity.find({ user: userId }).sort({ loginAt: -1 }).limit(10).lean(),
-    LoanReferral.find({ submittedBy: userId }).populate('service', 'name slug').sort({ createdAt: -1 }).limit(20).lean(),
+    User.find({ referredBy: userId }).select('fullName email mobile referralCode referredByCode createdAt roles').populate('roles', 'name slug').sort({ createdAt: -1 }).limit(5).lean(),
+    LoginActivity.find({ user: userId }).sort({ loginAt: -1 }).limit(5).lean(),
+    LoanReferral.find({ submittedBy: userId }).populate('service', 'name slug').sort({ createdAt: -1 }).limit(5).lean(),
     User.countDocuments({ referredBy: userId }), LoanReferral.countDocuments({ submittedBy: userId }),
   ]);
   return { user, metrics: { successfulLogins: user.successfulLoginCount || 0, registeredThroughCode: referredCount, loanReferralsSubmitted: loanReferralCount }, referredUsers, recentLogins, recentLoanReferrals: loanReferrals };
@@ -32,6 +32,31 @@ async function memberDashboard(userId) {
 
 dashboardRouter.get('/customer', requireRole('customer'), asyncHandler(async (request, response) => sendData(response, await memberDashboard(request.user._id))));
 dashboardRouter.get('/contractor', requireRole('contractor'), asyncHandler(async (request, response) => sendData(response, await memberDashboard(request.user._id))));
+
+for (const portal of ['customer', 'contractor']) {
+  dashboardRouter.get(`/${portal}/referred-users`, requireRole(portal), paginatedMemberCollection('referred-users'));
+  dashboardRouter.get(`/${portal}/service-referrals`, requireRole(portal), paginatedMemberCollection('service-referrals'));
+  dashboardRouter.get(`/${portal}/login-activity`, requireRole(portal), paginatedMemberCollection('login-activity'));
+}
+
+function paginatedMemberCollection(collection) {
+  return asyncHandler(async (request, response) => {
+    const page = Math.max(1, Number(request.query.page) || 1); const limit = Math.min(50, Math.max(5, Number(request.query.limit) || 10)); const skip = (page - 1) * limit; const userId = request.user._id;
+    let query; let count;
+    if (collection === 'referred-users') {
+      query = User.find({ referredBy: userId }).select('fullName email mobile referralCode referredByCode createdAt roles').populate('roles', 'name slug').sort({ createdAt: -1 });
+      count = User.countDocuments({ referredBy: userId });
+    } else if (collection === 'service-referrals') {
+      query = LoanReferral.find({ submittedBy: userId }).populate('service', 'name slug').sort({ createdAt: -1 });
+      count = LoanReferral.countDocuments({ submittedBy: userId });
+    } else {
+      query = LoginActivity.find({ user: userId }).sort({ loginAt: -1 });
+      count = LoginActivity.countDocuments({ user: userId });
+    }
+    const [items, total] = await Promise.all([query.skip(skip).limit(limit).lean(), count]);
+    sendData(response, items, 200, { page, limit, total, pages: Math.ceil(total / limit) });
+  });
+}
 
 dashboardRouter.get('/admin', requireRole(...ADMIN_ROLES), asyncHandler(async (_request, response) => {
   const [customerRole, contractorRole] = await Promise.all([Role.findOne({ slug: 'customer' }), Role.findOne({ slug: 'contractor' })]);
