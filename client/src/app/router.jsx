@@ -15,11 +15,18 @@ const PortalLoginPage = lazy(() => import('../pages/PortalLoginPage.jsx').then((
 const AccountRegisterPage = lazy(() => import('../pages/AccountRegisterPage.jsx').then((module) => ({ default: module.AccountRegisterPage })));
 const NotFoundPage = lazy(() => import('../pages/NotFoundPage.jsx').then((module) => ({ default: module.NotFoundPage })));
 const ApplyPage = lazy(() => import('../pages/ApplyPage.jsx').then((module) => ({ default: module.ApplyPage })));
+const TrackPage = lazy(() => import('../pages/TrackPage.jsx').then((module) => ({ default: module.TrackPage })));
+const GalleryPage = lazy(() => import('../pages/GalleryPage.jsx').then((module) => ({ default: module.GalleryPage })));
+const FaqPage = lazy(() => import('../pages/FaqPage.jsx').then((module) => ({ default: module.FaqPage })));
+const PartnerPage = lazy(() => import('../pages/PartnerPage.jsx').then((module) => ({ default: module.PartnerPage })));
+const LegalPage = lazy(() => import('../pages/LegalPage.jsx').then((module) => ({ default: module.LegalPage })));
 const CustomerDashboardPage = lazy(() => import('../pages/dashboards/MemberDashboardPage.jsx').then((module) => ({ default: module.CustomerDashboardPage })));
 const ContractorDashboardPage = lazy(() => import('../pages/dashboards/MemberDashboardPage.jsx').then((module) => ({ default: module.ContractorDashboardPage })));
 const AdminDashboardPage = lazy(() => import('../pages/dashboards/AdminDashboardPage.jsx').then((module) => ({ default: module.AdminDashboardPage })));
 const AdminUserDetailPage = lazy(() => import('../pages/dashboards/AdminUserDetailPage.jsx').then((module) => ({ default: module.AdminUserDetailPage })));
 const AdminReferralDetailPage = lazy(() => import('../pages/dashboards/AdminReferralDetailPage.jsx').then((module) => ({ default: module.AdminReferralDetailPage })));
+const AdminContentPage = lazy(() => import('../pages/dashboards/AdminContentPage.jsx').then((module) => ({ default: module.AdminContentPage })));
+const AdminApplicationsPage = lazy(() => import('../pages/dashboards/AdminApplicationsPage.jsx').then((module) => ({ default: module.AdminApplicationsPage })));
 const route = (element) => <Suspense fallback={<div className="shell route-loading" role="status">Loading page…</div>}>{element}</Suspense>;
 const adminRoles=['super-admin','admin','operations-manager','application-manager','finance-manager','support-agent','content-manager'];
 
@@ -31,15 +38,15 @@ export const router = createBrowserRouter([{
     { path: 'customer/sign-in', element: route(<PortalLoginPage portal="customer" />) }, { path: 'contractor/sign-in', element: route(<PortalLoginPage portal="contractor" />) }, { path: 'admin/sign-in', element: route(<PortalLoginPage portal="admin" />) },
     { path: 'customer/sign-up', element: route(<AccountRegisterPage accountType="customer" />) }, { path: 'contractor/sign-up', element: route(<AccountRegisterPage accountType="contractor" />) },
     { path: 'about', element: route(<AboutPage />) },
-    { path: 'partner', element: <SimpleContentPage title="Grow with the VFS partner network" eyebrow="Partner with us" copy="The contractor program is being implemented with verified onboarding, unique referral attribution, application visibility, subscriptions, and ledger-backed commissions. No partner metric is shown until it comes from operational data." /> },
+    { path: 'partner', element: route(<PartnerPage />) },
     { path: 'apply', element: route(<ApplyPage />) },
-    { path: 'track', element: <SimpleContentPage title="Track securely with OTP verification" eyebrow="Application tracking" copy="For privacy, application information will be shown only after the application ID and registered mobile are verified through a rate-limited OTP flow." /> },
+    { path: 'track', element: route(<TrackPage />) },
     { path: 'eligibility', element: <SimpleContentPage title="Start with your requirement—not a rigid checklist" eyebrow="Inclusive loan assistance" copy="VFS Group assists salaried and self-employed customers with or without ITRs, including customers with a low or limited CIBIL score. Share the information available to you and our team will guide the next step. Final approval and terms are decided by the relevant lender." /> },
-    { path: 'gallery', element: <SimpleContentPage title="Approved moments from VFS Groups" eyebrow="Gallery" copy="Only administrator-approved media stored through the gallery API will appear here. No stock awards, partnerships, or customer claims are fabricated." /> },
-    { path: 'faqs', element: <SimpleContentPage title="Straight answers, careful claims" eyebrow="Frequently asked questions" copy="Service-specific questions are available on each published service page. General content will be managed through the CMS so answers stay accurate and reviewable." /> },
-    { path: 'privacy', element: <SimpleContentPage title="Privacy policy" eyebrow="Legal" copy="The final policy will describe collected data, purposes, lawful handling, providers, retention, security controls, and user rights. Authorized legal text must be published before production launch." /> },
-    { path: 'terms', element: <SimpleContentPage title="Terms and conditions" eyebrow="Legal" copy="Production terms must be reviewed and published by an authorized administrator before the service accepts live applications." /> },
-    { path: 'disclaimer', element: <SimpleContentPage title="Financial services disclaimer" eyebrow="Important information" copy="VFS Groups provides application assistance, product guidance, and related support. Approval, rates, loan amounts, tenure, charges, disbursement, insurance benefits, exclusions, premiums, investment risks and returns, cashback eligibility, and claims depend on the relevant institution and applicable terms." /> },
+    { path: 'gallery', element: route(<GalleryPage />) },
+    { path: 'faqs', element: route(<FaqPage />) },
+    { path: 'privacy', element: route(<LegalPage slug="privacy" />) },
+    { path: 'terms', element: route(<LegalPage slug="terms" />) },
+    { path: 'disclaimer', element: route(<LegalPage slug="disclaimer" />) },
     { path: '*', element: route(<NotFoundPage />) },
   ],
 },
@@ -48,4 +55,6 @@ export const router = createBrowserRouter([{
 { path:'/admin/dashboard',element:route(<ProtectedRoute allowedRoles={adminRoles}><AdminDashboardPage/></ProtectedRoute>) },
 { path:'/admin/users/:id',element:route(<ProtectedRoute allowedRoles={adminRoles}><AdminUserDetailPage/></ProtectedRoute>) },
 { path:'/admin/referrals/:code',element:route(<ProtectedRoute allowedRoles={adminRoles}><AdminReferralDetailPage/></ProtectedRoute>) },
+{ path:'/admin/applications',element:route(<ProtectedRoute allowedRoles={adminRoles}><AdminApplicationsPage/></ProtectedRoute>) },
+{ path:'/admin/content',element:route(<ProtectedRoute allowedRoles={adminRoles}><AdminContentPage/></ProtectedRoute>) },
 ]);

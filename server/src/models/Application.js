@@ -8,6 +8,7 @@ const schema = new mongoose.Schema({
   personal: { fullName: String, mobile: String, email: String, dateOfBirth: Date, city: String, state: String, pinCode: String },
   financial: { employmentType: String, employerOrBusinessName: String, monthlyIncome: Number, annualTurnover: Number, existingEmi: Number, requestedAmount: Number, itrStatus: String, creditProfile: String },
   serviceSpecific: mongoose.Schema.Types.Mixed,
+  resumeTokenHash: { type: String, select: false }, draftExpiresAt: Date,
   referralCode: { type: String, uppercase: true, trim: true }, referralLockedAt: Date,
   consents: { privacy: Boolean, communication: Boolean, accuracy: Boolean, terms: Boolean, capturedAt: Date, ip: String, userAgent: String },
   submittedAt: Date, createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

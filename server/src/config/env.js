@@ -22,6 +22,8 @@ const schema = z.object({
   CLOUDINARY_API_KEY: z.string().default(''),
   CLOUDINARY_API_SECRET: z.string().default(''),
   EMAIL_PROVIDER: z.string().default('mock'),
+  SMS_PROVIDER: z.string().default('mock'),
+  MOCK_OTP_DISPLAY: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
   AI_PROVIDER: z.string().default('mock'),
   GEMINI_API_KEY: z.string().default(''),
   GEMINI_MODEL: z.string().default('gemini-3.5-flash'),

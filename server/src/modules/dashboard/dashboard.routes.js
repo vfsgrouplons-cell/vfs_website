@@ -4,6 +4,9 @@ import { ADMIN_ROLES, requireAuth, requireRole } from '../../middleware/auth.js'
 import { requireCsrf } from '../../middleware/csrf.js';
 import { validate } from '../../middleware/validate.js';
 import { AuditLog } from '../../models/AuditLog.js';
+import { Application, APPLICATION_STATUSES } from '../../models/Application.js';
+import { ApplicationDocument } from '../../models/ApplicationDocument.js';
+import { ApplicationStatusHistory } from '../../models/ApplicationStatusHistory.js';
 import { LoanReferral, LOAN_REFERRAL_STATUSES } from '../../models/LoanReferral.js';
 import { LoginActivity } from '../../models/LoginActivity.js';
 import { Role } from '../../models/Role.js';
@@ -11,6 +14,7 @@ import { User } from '../../models/User.js';
 import { ApiError } from '../../utils/apiError.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { sendData } from '../../utils/apiResponse.js';
+import { storageProvider } from '../../providers/storage.js';
 
 export const dashboardRouter = Router();
 dashboardRouter.use(requireAuth);
@@ -31,7 +35,7 @@ dashboardRouter.get('/contractor', requireRole('contractor'), asyncHandler(async
 
 dashboardRouter.get('/admin', requireRole(...ADMIN_ROLES), asyncHandler(async (_request, response) => {
   const [customerRole, contractorRole] = await Promise.all([Role.findOne({ slug: 'customer' }), Role.findOne({ slug: 'contractor' })]);
-  const [totalUsers, totalCustomers, totalContractors, loginTotals, referredRegistrations, directRegistrations, totalCodes, totalLoanReferrals, recentRegistrations, recentLogins, recentLoanReferrals, mostUsedCodes, topCustomers, topContractors, loanReferralsByUser] = await Promise.all([
+  const [totalUsers, totalCustomers, totalContractors, loginTotals, referredRegistrations, directRegistrations, totalCodes, totalLoanReferrals, recentRegistrations, recentLogins, recentLoanReferrals, mostUsedCodes, topCustomers, topContractors, loanReferralsByUser, totalApplications, applicationStatusTotals] = await Promise.all([
     User.countDocuments({ status: { $ne: 'deleted' } }),
     User.countDocuments({ roles: customerRole?._id, status: { $ne: 'deleted' } }),
     User.countDocuments({ roles: contractorRole?._id, status: { $ne: 'deleted' } }),
@@ -43,8 +47,9 @@ dashboardRouter.get('/admin', requireRole(...ADMIN_ROLES), asyncHandler(async (_
     User.aggregate([{ $match: { referredByCode: { $exists: true, $ne: null } } }, { $group: { _id: '$referredByCode', registrations: { $sum: 1 } } }, { $sort: { registrations: -1 } }, { $limit: 10 }, { $lookup: { from: 'users', localField: '_id', foreignField: 'referralCode', as: 'owner' } }, { $unwind: { path: '$owner', preserveNullAndEmptyArrays: true } }, { $project: { _id: 0, referralCode: '$_id', registrations: 1, owner: { _id: '$owner._id', fullName: '$owner.fullName' } } }]),
     topReferrers(customerRole?._id), topReferrers(contractorRole?._id),
     LoanReferral.aggregate([{ $group: { _id: '$submittedBy', submissions: { $sum: 1 } } }, { $sort: { submissions: -1 } }, { $limit: 20 }, { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } }, { $unwind: '$user' }, { $project: { _id: 0, user: { _id: '$user._id', fullName: '$user.fullName', referralCode: '$user.referralCode' }, submissions: 1 } }]),
+    Application.countDocuments({ status: { $ne: 'draft' } }), Application.aggregate([{ $match: { status: { $ne: 'draft' } } }, { $group: { _id: '$status', count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
   ]);
-  sendData(response, { metrics: { totalUsers, totalCustomers, totalContractors, totalSuccessfulLogins: loginTotals[0]?.total || 0, uniqueUsersLoggedIn: loginTotals[0]?.unique || 0, referredRegistrations, directRegistrations, totalReferralCodes: totalCodes, totalLoanReferrals }, recentRegistrations, recentLogins, recentLoanReferrals, mostUsedReferralCodes: mostUsedCodes, topReferringCustomers: topCustomers, topReferringContractors: topContractors, loanReferralsByUser });
+  sendData(response, { metrics: { totalUsers, totalCustomers, totalContractors, totalSuccessfulLogins: loginTotals[0]?.total || 0, uniqueUsersLoggedIn: loginTotals[0]?.unique || 0, referredRegistrations, directRegistrations, totalReferralCodes: totalCodes, totalLoanReferrals, totalApplications }, applicationStatusTotals, recentRegistrations, recentLogins, recentLoanReferrals, mostUsedReferralCodes: mostUsedCodes, topReferringCustomers: topCustomers, topReferringContractors: topContractors, loanReferralsByUser });
 }));
 
 function topReferrers(roleId) {
@@ -93,6 +98,45 @@ dashboardRouter.patch('/admin/loan-referrals/:id/status', requireRole(...ADMIN_R
   item.status = request.body.status; item.statusUpdatedAt = new Date(); await item.save();
   await AuditLog.create({ actor: request.user._id, actorRoles: request.user.roles.map((role) => role.slug), action: 'loan_referral.status.updated', resourceType: 'LoanReferral', resourceId: item._id, oldValues: { status: oldStatus }, newValues: { status: item.status }, reason: request.body.reason, ip: request.ip, userAgent: request.get('user-agent'), requestId: request.id });
   sendData(response, await LoanReferral.findById(item._id).populate('submittedBy', 'fullName referralCode').populate('service', 'name slug'));
+}));
+
+dashboardRouter.get('/admin/applications', requireRole(...ADMIN_ROLES), asyncHandler(async (request, response) => {
+  const page = Math.max(1, Number(request.query.page) || 1); const limit = Math.min(100, Math.max(1, Number(request.query.limit) || 25)); const filter = { status: { $ne: 'draft' } };
+  if (request.query.status) filter.status = request.query.status;
+  if (request.query.service) filter.service = request.query.service;
+  if (request.query.dateFrom || request.query.dateTo) filter.createdAt = { ...(request.query.dateFrom ? { $gte: new Date(request.query.dateFrom) } : {}), ...(request.query.dateTo ? { $lte: new Date(`${request.query.dateTo}T23:59:59.999Z`) } : {}) };
+  const q = String(request.query.q || '').trim(); if (q) { const regex = new RegExp(escapeRegex(q), 'i'); filter.$or = [{ applicationId: regex }, { leadId: regex }, { 'personal.fullName': regex }, { 'personal.mobile': regex }, { 'personal.email': regex }]; }
+  const [items, total] = await Promise.all([Application.find(filter).populate('service', 'name slug category').sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(), Application.countDocuments(filter)]);
+  sendData(response, items, 200, { page, limit, total, pages: Math.ceil(total / limit) });
+}));
+
+dashboardRouter.get('/admin/applications/:id', requireRole(...ADMIN_ROLES), asyncHandler(async (request, response) => {
+  const application = await Application.findById(request.params.id).populate('service', 'name slug category').lean(); if (!application) throw new ApiError(404, 'APPLICATION_NOT_FOUND', 'Application not found.');
+  const [history, documents] = await Promise.all([ApplicationStatusHistory.find({ application: application._id }).select('+internalNote').populate('changedBy', 'fullName').sort({ createdAt: 1 }).lean(), ApplicationDocument.find({ application: application._id }).sort({ createdAt: -1 }).lean()]);
+  sendData(response, { application, history, documents });
+}));
+
+const applicationStatusSchema = z.object({ status: z.enum(APPLICATION_STATUSES), publicNote: z.string().trim().min(5).max(1000), internalNote: z.string().trim().max(2000).optional(), reason: z.string().trim().min(3).max(500) });
+dashboardRouter.patch('/admin/applications/:id/status', requireRole(...ADMIN_ROLES), requireCsrf, validate(applicationStatusSchema), asyncHandler(async (request, response) => {
+  const application = await Application.findById(request.params.id); if (!application) throw new ApiError(404, 'APPLICATION_NOT_FOUND', 'Application not found.'); const oldStatus = application.status;
+  application.status = request.body.status; application.updatedBy = request.user._id; await application.save();
+  await Promise.all([
+    ApplicationStatusHistory.create({ application: application._id, oldStatus, newStatus: application.status, changedBy: request.user._id, changedByRole: request.user.roles[0]?.slug, publicNote: request.body.publicNote, internalNote: request.body.internalNote, reason: request.body.reason }),
+    AuditLog.create({ actor: request.user._id, actorRoles: request.user.roles.map((role) => role.slug), action: 'application.status.updated', resourceType: 'Application', resourceId: application._id, oldValues: { status: oldStatus }, newValues: { status: application.status }, reason: request.body.reason, ip: request.ip, userAgent: request.get('user-agent'), requestId: request.id }),
+  ]);
+  sendData(response, { id: application.id, applicationId: application.applicationId, status: application.status });
+}));
+
+const documentStatusSchema = z.object({ status: z.enum(['verified', 'rejected']), reason: z.string().trim().max(500).optional() });
+dashboardRouter.patch('/admin/documents/:id/status', requireRole(...ADMIN_ROLES), requireCsrf, validate(documentStatusSchema), asyncHandler(async (request, response) => {
+  const document = await ApplicationDocument.findById(request.params.id); if (!document) throw new ApiError(404, 'DOCUMENT_NOT_FOUND', 'Document not found.');
+  document.status = request.body.status; document.rejectionReason = request.body.status === 'rejected' ? request.body.reason : undefined; document.verifiedBy = request.user._id; document.verifiedAt = new Date(); await document.save();
+  sendData(response, document);
+}));
+
+dashboardRouter.get('/admin/documents/:id/access', requireRole(...ADMIN_ROLES), asyncHandler(async (request, response) => {
+  const document = await ApplicationDocument.findById(request.params.id).lean(); if (!document) throw new ApiError(404, 'DOCUMENT_NOT_FOUND', 'Document not found.');
+  sendData(response, { url: storageProvider.signedUrl(document.storage.publicId, { resourceType: document.storage.resourceType, expiresInSeconds: 300 }), expiresInSeconds: 300 });
 }));
 
 function escapeRegex(value) { return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }

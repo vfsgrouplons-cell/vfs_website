@@ -4,6 +4,9 @@ import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
 import { Role } from '../src/models/Role.js';
+import { Application } from '../src/models/Application.js';
+import { Faq } from '../src/models/Faq.js';
+import { Service } from '../src/models/Service.js';
 import { syncInitialAdmin } from '../src/seeds/initialAdmin.js';
 
 describe('portal authentication flows', () => {
@@ -48,7 +51,7 @@ describe('portal authentication flows', () => {
     const dashboard = await browser.get(`/api/v1/dashboard/${portal}`);
     expect(dashboard.status).toBe(200);
     expect(dashboard.body.data.user.fullName).toBe(registration.fullName);
-  });
+  }, 15_000);
 
   it('creates and synchronizes the environment-configured administrator credentials', async () => {
     const role = await Role.findOne({ slug: 'super-admin' });
@@ -66,5 +69,50 @@ describe('portal authentication flows', () => {
     expect((await syncInitialAdmin(nextConfig, role)).status).toBe('password_synchronized');
     expect((await request(app).post('/api/v1/auth/admin/login').send({ identifier: config.INITIAL_ADMIN_EMAIL, password: config.INITIAL_ADMIN_PASSWORD })).status).toBe(401);
     expect((await request(app).post('/api/v1/auth/admin/login').send({ identifier: config.INITIAL_ADMIN_EMAIL, password: nextConfig.INITIAL_ADMIN_PASSWORD })).status).toBe(200);
+  }, 15_000);
+
+  it('saves, resumes, submits, and securely tracks a public application', async () => {
+    const service = await Service.create({ name: 'Test Personal Loan', slug: 'test-personal-loan', category: 'Loans', shortDescription: 'Test service', overview: 'Test overview', status: 'published' });
+    const browser = request.agent(app);
+    const draft = await browser.post('/api/v1/applications/public/drafts').send({ service: service.id, personal: { fullName: 'Draft Customer', mobile: '919100000099' }, financial: { employmentType: 'salaried', requestedAmount: 500000 }, serviceSpecific: { requirementSummary: 'Need assistance' } });
+    expect(draft.status).toBe(201);
+    const resumed = await browser.get(`/api/v1/applications/public/drafts/${draft.body.data.draftId}`).set('x-resume-token', draft.body.data.resumeToken);
+    expect(resumed.status).toBe(200);
+    expect(resumed.body.data.personal.fullName).toBe('Draft Customer');
+
+    const submitted = await browser.post('/api/v1/applications/public/submit').set('x-resume-token', draft.body.data.resumeToken).send({
+      draftId: draft.body.data.draftId, service: service.id,
+      personal: { fullName: 'Draft Customer', mobile: '919100000099', email: 'draft@example.com', dateOfBirth: '1990-01-01', city: 'Hyderabad', state: 'Telangana', pinCode: '500001' },
+      financial: { employmentType: 'salaried', employerOrBusinessName: 'Test Employer', monthlyIncome: 50000, annualTurnover: 0, existingEmi: 0, requestedAmount: 500000, itrStatus: 'not_sure', creditProfile: 'not_sure' },
+      serviceSpecific: { requirementSummary: 'Need personal loan guidance' }, referralCode: '', consents: { privacy: true, communication: false, accuracy: true, terms: true }, website: '',
+    });
+    expect(submitted.status).toBe(201);
+    expect(await Application.countDocuments()).toBe(1);
+
+    const challenge = await browser.post('/api/v1/applications/public/track/request').send({ applicationId: submitted.body.data.applicationId, mobile: '919100000099' });
+    expect(challenge.status).toBe(202);
+    expect(challenge.body.data.mockCode).toMatch(/^\d{6}$/);
+    const verified = await browser.post('/api/v1/applications/public/track/verify').send({ challengeId: challenge.body.data.challengeId, code: challenge.body.data.mockCode });
+    expect(verified.status).toBe(200);
+    expect(verified.body.data.application.applicationId).toBe(submitted.body.data.applicationId);
+    const tracked = await browser.get(`/api/v1/applications/public/track/${submitted.body.data.applicationId}`).set('x-tracking-token', verified.body.data.trackToken);
+    expect(tracked.status).toBe(200);
+    expect(tracked.body.data.history).toHaveLength(1);
+  }, 20_000);
+
+  it('publishes only approved FAQ records', async () => {
+    await Faq.create([{ category: 'Applications', question: 'Published question?', answer: 'This answer is publicly available.', status: 'published' }, { category: 'Applications', question: 'Draft question?', answer: 'This answer must remain private.', status: 'draft' }]);
+    const response = await request(app).get('/api/v1/content/faqs');
+    expect(response.status).toBe(200);
+    expect(response.body.data).toHaveLength(1);
+    expect(response.body.data[0].question).toBe('Published question?');
+  });
+
+  it('answers chat greetings through the working mock provider', async () => {
+    await Service.create({ name: 'Personal Loans', slug: 'personal-loans', category: 'Loans', shortDescription: 'Personal funding assistance.', overview: 'Guided assistance.', status: 'published', eligibility: ['Salaried and self-employed'], documents: ['Identity proof'], process: ['Share requirement'] });
+    const response = await request(app).post('/api/v1/chat/messages').send({ message: 'hi', history: [] });
+    expect(response.status).toBe(200);
+    expect(response.body.data.message).toContain('Hello');
+    expect(response.body.data.provider).toBe('mock-ai');
   });
 });

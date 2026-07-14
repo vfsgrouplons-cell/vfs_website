@@ -82,3 +82,52 @@ export const services = [
   investment({ name: 'SIP (Systematic Investment Plans)', slug: 'sip-investments', shortDescription: 'Guidance for disciplined, periodic investment planning.', overview: 'Build a systematic investment approach around your goals, time horizon, and risk understanding with digital onboarding support.', useCases: ['Periodic investing', 'Long-term goal planning', 'Investment diversification'], documents: ['Identity and address proof', 'PAN and bank details', 'Nominee details', 'Additional KYC requested by the provider'], relatedSlugs: ['lump-sum-investments', 'corporate-fixed-deposits'] }),
   investment({ name: 'Lump Sum Investments', slug: 'lump-sum-investments', shortDescription: 'Guidance for investing a planned amount through suitable options.', overview: 'Discuss a one-time investment requirement and understand diversification, product risk, time horizon, and official terms before proceeding.', useCases: ['One-time investment', 'Portfolio diversification', 'Goal-based investment planning'], documents: ['Identity and address proof', 'PAN and bank details', 'Nominee details', 'Additional KYC requested by the provider'], relatedSlugs: ['sip-investments', 'corporate-fixed-deposits'] }),
 ].map((service, index) => ({ ...service, status: 'published', sortOrder: index + 1, seo: { title: `${service.name} | VFS Groups`, description: service.shortDescription } }));
+
+export const generalFaqs = [
+  ['Loans', 'Can I request loan assistance without ITRs?', 'Yes. VFS Groups accepts requests from salaried and self-employed customers with or without ITRs and reviews the information currently available. The relevant lender decides final eligibility and terms.'],
+  ['Loans', 'Can I contact VFS Groups with a low CIBIL score?', 'Yes. A low or limited CIBIL score does not prevent you from requesting assistance. No approval is guaranteed, and the relevant lender makes the final decision.'],
+  ['Applications', 'How do I check my application status?', 'Use your application ID and registered mobile number on the Track Application page. A short-lived verification code is required before status information or document upload is available.'],
+  ['Applications', 'Can I save an application and finish it later?', 'Yes. After choosing a service, save the draft on the application form. The secure resume token stays on the same browser, and the MongoDB draft expires after 30 days.'],
+  ['Documents', 'When should I upload documents?', 'Sensitive documents are accepted only after application tracking verification. Upload only the files requested for the selected service.'],
+  ['Security', 'How does VFS Groups protect application access?', 'Portal sessions use secure cookies, tracking access uses short-lived verification, and sensitive Cloudinary files use authenticated delivery with time-limited access.'],
+  ['Services', 'Does VFS Groups guarantee approval, rates, cover, or returns?', 'No. VFS Groups provides application assistance and guidance. Approval, pricing, issuance, cover, returns, and final terms are controlled by the relevant provider.'],
+  ['Cashback', 'Is cashback available on every service?', 'No. Cashback is available only when a specific eligible offer and its terms have been published by VFS Groups.'],
+].map(([category, question, answer], index) => ({ category, question, answer, status: 'published', sortOrder: index + 1 }));
+
+export const contentPages = [
+  {
+    slug: 'privacy', eyebrow: 'Legal', title: 'Privacy notice', status: 'published',
+    summary: 'This notice explains how VFS Groups handles information submitted through this website and its authenticated portals.',
+    seo: { title: 'Privacy Notice | VFS Groups', description: 'How VFS Groups collects, uses, stores, and protects website and application information.' },
+    sections: [
+      { heading: 'Information collected', body: 'Depending on the service used, VFS Groups may collect contact details, identity and profile information, financial requirement details, application records, documents, consent records, referral attribution, login activity, device information, and support messages.', bullets: [] },
+      { heading: 'Why information is used', body: 'Information is used to respond to enquiries, provide application assistance, coordinate with an appropriate provider when authorized, operate secure portals, prevent abuse, maintain audit records, improve the service, and comply with applicable obligations.', bullets: [] },
+      { heading: 'Sharing and providers', body: 'Information is shared only with authorized staff, contracted technology providers, and relevant financial-service providers when necessary for the requested service or when required by law. VFS Groups does not publish customer details or testimonials without confirmation of permission.', bullets: [] },
+      { heading: 'Retention and security', body: 'Records are retained only for operational, legal, security, and audit needs. Controls include role-based access, secure cookies, verification challenges, encrypted transport, restricted document delivery, and activity logging. No online system can promise absolute security.', bullets: [] },
+      { heading: 'Your choices', body: 'You may ask VFS Groups to correct inaccurate information, withdraw optional communication consent, or raise a privacy request through the official contact form. Some records may need to be retained where legally or operationally required.', bullets: [] },
+    ],
+  },
+  {
+    slug: 'terms', eyebrow: 'Legal', title: 'Website and service terms', status: 'published',
+    summary: 'These terms govern use of the VFS Groups website, enquiry forms, application assistance, referral tools, and authenticated portals.',
+    seo: { title: 'Terms and Conditions | VFS Groups', description: 'Terms governing use of VFS Groups website and financial-service assistance tools.' },
+    sections: [
+      { heading: 'Nature of the service', body: 'VFS Groups helps customers understand options, organize information, and coordinate applications. VFS Groups is not promising approval, disbursement, policy issuance, investment performance, a particular rate, or a particular provider outcome.', bullets: [] },
+      { heading: 'Accurate information', body: 'You must provide information that is accurate to the best of your knowledge, protect access codes and portal credentials, and notify VFS Groups if submitted information changes.', bullets: [] },
+      { heading: 'Provider terms', body: 'Any loan, insurance, deposit, investment, or other financial product is governed by the documents, eligibility rules, pricing, risk disclosures, and final decision of the relevant provider.', bullets: [] },
+      { heading: 'Acceptable use', body: 'Do not submit unlawful content, another person’s information without authority, malicious files, automated abuse, or attempts to bypass access controls. Access may be restricted to protect customers and the platform.', bullets: [] },
+      { heading: 'Updates and contact', body: 'These terms may be updated as services and legal requirements change. The current published version applies from its displayed update date. Questions can be raised using the official contact form.', bullets: [] },
+    ],
+  },
+  {
+    slug: 'disclaimer', eyebrow: 'Important information', title: 'Financial services disclaimer', status: 'published',
+    summary: 'Read this information before relying on service descriptions, calculators, provider information, or application guidance.',
+    seo: { title: 'Financial Services Disclaimer | VFS Groups', description: 'Important limitations concerning VFS Groups financial-service assistance and website tools.' },
+    sections: [
+      { heading: 'No guaranteed outcome', body: 'Approval, loan amount, interest rate, tenure, charges, disbursement, insurance acceptance, premium, cover, claims, deposit terms, investment risk, and returns are decided under the relevant provider’s official terms. Past or illustrative information does not guarantee a future result.', bullets: [] },
+      { heading: 'Illustrative tools', body: 'EMI calculations and other planning outputs are estimates based on the inputs supplied. Actual repayment schedules, fees, taxes, and provider calculations may differ.', bullets: [] },
+      { heading: 'Independent review', body: 'Read official product documents and risk disclosures and obtain professional advice where appropriate before accepting a financial product. Never send money or sensitive credentials to an unverified person.', bullets: [] },
+      { heading: 'Cashback and rewards', body: 'A cashback or reward applies only when VFS Groups has published a specific eligible offer and the customer satisfies all stated conditions. No general cashback entitlement is created by website wording.', bullets: [] },
+    ],
+  },
+];

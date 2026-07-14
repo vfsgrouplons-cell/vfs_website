@@ -2,13 +2,17 @@ import { Menu, MessageCircle, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { createWhatsAppUrl } from '../config/contact.js';
+import { trackEvent } from '../services/analytics.js';
+import { useSiteSettings } from '../services/content.js';
 import { ChatWidget } from './ChatWidget.jsx';
 
 const links = [['/', 'Home'], ['/about', 'About'], ['/services', 'Services'], ['/partner', 'Partner With Us'], ['/gallery', 'Gallery'], ['/contact', 'Contact']];
 
 export function SiteLayout() {
   const [open, setOpen] = useState(false); const location = useLocation();
+  const settings = useSiteSettings(); const phone = settings.data?.contact?.phone || '919160353295'; const whatsapp = settings.data?.contact?.whatsapp || phone;
   useEffect(() => setOpen(false), [location.pathname]);
+  useEffect(() => { trackEvent('page_view', {}, location.pathname); }, [location.pathname]);
   return <div className="min-h-screen bg-canvas text-ink">
     <a href="#main-content" className="skip-link">Skip to main content</a>
     <header className="site-header">
@@ -21,8 +25,8 @@ export function SiteLayout() {
       {open && <nav id="mobile-navigation" className="mobile-nav" aria-label="Mobile navigation">{links.map(([to, label]) => <NavLink key={to} to={to} onClick={() => setOpen(false)}>{label}</NavLink>)}<Link to="/track" onClick={() => setOpen(false)}>Track application</Link><Link className="button button-dark" to="/sign-in" onClick={() => setOpen(false)}>Sign in</Link><Link className="button button-gold" to="/apply" onClick={() => setOpen(false)}>Apply now</Link></nav>}
     </header>
     <main id="main-content" key={location.pathname}><Outlet /></main>
-    <a className="whatsapp-fab" href={createWhatsAppUrl('Hello VFS Groups, I would like assistance choosing a financial service.')} target="_blank" rel="noreferrer" aria-label="Contact VFS Groups on WhatsApp"><MessageCircle /></a>
-    <ChatWidget />
-    <footer className="site-footer"><div className="shell footer-grid"><div><Link to="/" className="brand footer-brand"><img src="/brand/vfs-groups-logo.png" alt="" /><span>VFS Groups<small>Your financial growth, our commitment</small></span></Link><p>One destination for loan assistance, insurance guidance, investments, and wealth services.</p></div><div><h2>Explore</h2><Link to="/services">Services</Link><Link to="/emi-calculator">EMI calculator</Link><Link to="/track">Track application</Link><Link to="/partner">Partner program</Link></div><div><h2>Company</h2><Link to="/about">About</Link><Link to="/contact">Contact</Link><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><Link to="/disclaimer">Disclaimer</Link></div></div><div className="shell footer-bottom"><p>© {new Date().getFullYear()} VFS Groups. All rights reserved.</p><p>Cashback is limited to eligible services. Provider terms and approval policies apply.</p></div></footer>
+    <a className="whatsapp-fab" href={createWhatsAppUrl('Hello VFS Groups, I would like assistance choosing a financial service.', whatsapp)} target="_blank" rel="noreferrer" aria-label="Contact VFS Groups on WhatsApp"><MessageCircle /></a>
+    <ChatWidget phone={phone} whatsapp={whatsapp} />
+    <footer className="site-footer"><div className="shell footer-grid"><div><Link to="/" className="brand footer-brand"><img src="/brand/vfs-groups-logo.png" alt="" /><span>VFS Groups<small>Your financial growth, our commitment</small></span></Link><p>One destination for loan assistance, insurance guidance, investments, and wealth services.</p><p className="footer-disclosure">{settings.data?.legal?.providerRelationship}</p></div><div><h2>Explore</h2><Link to="/services">Services</Link><Link to="/emi-calculator">EMI calculator</Link><Link to="/track">Track application</Link><Link to="/partner">Partner program</Link><Link to="/faqs">FAQs</Link></div><div><h2>Company</h2><Link to="/about">About</Link><Link to="/gallery">Gallery</Link><Link to="/contact">Contact</Link><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><Link to="/disclaimer">Disclaimer</Link></div></div><div className="shell footer-bottom"><p>© {new Date().getFullYear()} VFS Groups. All rights reserved.</p><p>{settings.data?.cashback?.enabled ? settings.data.cashback.terms : 'No general cashback entitlement is currently published. Provider terms and approval policies apply.'}</p></div></footer>
   </div>;
 }

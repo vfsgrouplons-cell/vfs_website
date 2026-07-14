@@ -1,5 +1,6 @@
 import { CheckCircle2, ShieldCheck, Sparkles, TrendingUp, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { Seo } from '../components/Seo.jsx';
 
 const missionPoints = [
   'Provide fast, reliable, and hassle-free financial solutions',
@@ -15,6 +16,7 @@ const trends = ['Digital loan processing', 'Paperless documentation', 'Online cu
 
 export function AboutPage() {
   return <>
+    <Seo title="About VFS Groups" description="VFS Groups vision, mission, values, and commitment to transparent financial-service assistance." path="/about"/>
     <section className="page-hero about-hero"><div className="shell"><span className="eyebrow"><Sparkles size={16}/> About VFS Group</span><h1>Your trusted partner for financial growth.</h1><p>VFS Group brings loans, insurance, investments, and wealth guidance together in one customer-focused financial service experience.</p><div className="button-row"><Link className="button button-gold" to="/services">Explore our services</Link><Link className="button button-outline" to="/contact">Talk to our team</Link></div></div></section>
 
     <section className="section"><div className="shell purpose-grid">

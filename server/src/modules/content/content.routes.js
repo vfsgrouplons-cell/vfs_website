@@ -1,0 +1,92 @@
+import { mkdirSync } from 'node:fs';
+import { unlink } from 'node:fs/promises';
+import { Router } from 'express';
+import multer from 'multer';
+import { z } from 'zod';
+import { ADMIN_ROLES, requireAuth, requireRole } from '../../middleware/auth.js';
+import { requireCsrf } from '../../middleware/csrf.js';
+import { validate } from '../../middleware/validate.js';
+import { AnalyticsEvent } from '../../models/AnalyticsEvent.js';
+import { ContentPage } from '../../models/ContentPage.js';
+import { Faq } from '../../models/Faq.js';
+import { GalleryItem } from '../../models/GalleryItem.js';
+import { SiteSettings } from '../../models/SiteSettings.js';
+import { Testimonial } from '../../models/Testimonial.js';
+import { storageProvider } from '../../providers/storage.js';
+import { ApiError } from '../../utils/apiError.js';
+import { asyncHandler } from '../../utils/asyncHandler.js';
+import { sendData } from '../../utils/apiResponse.js';
+
+export const contentRouter = Router();
+const uploadDirectory = '/tmp/vfs-groups-uploads';
+mkdirSync(uploadDirectory, { recursive: true });
+const upload = multer({ dest: uploadDirectory, limits: { fileSize: 8 * 1024 * 1024 }, fileFilter(_request, file, callback) { callback(null, ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)); } });
+const status = z.enum(['draft', 'published', 'archived']);
+
+contentRouter.get('/settings', asyncHandler(async (_request, response) => {
+  const settings = await SiteSettings.findOneAndUpdate({ key: 'public' }, { $setOnInsert: { key: 'public' } }, { new: true, upsert: true, setDefaultsOnInsert: true }).lean();
+  sendData(response, settings);
+}));
+contentRouter.get('/faqs', asyncHandler(async (request, response) => {
+  const filter = { status: 'published' }; if (request.query.category) filter.category = request.query.category;
+  sendData(response, await Faq.find(filter).sort({ category: 1, sortOrder: 1, createdAt: 1 }).lean());
+}));
+contentRouter.get('/gallery', asyncHandler(async (_request, response) => sendData(response, await GalleryItem.find({ status: 'published', consentConfirmed: true }).sort({ sortOrder: 1, capturedAt: -1, createdAt: -1 }).lean())));
+contentRouter.get('/testimonials', asyncHandler(async (_request, response) => sendData(response, await Testimonial.find({ status: 'published', consentConfirmed: true, verifiedAt: { $exists: true } }).sort({ sortOrder: 1, createdAt: -1 }).lean())));
+contentRouter.get('/pages/:slug', asyncHandler(async (request, response) => {
+  const page = await ContentPage.findOne({ slug: request.params.slug, status: 'published' }).lean();
+  if (!page) throw new ApiError(404, 'CONTENT_PAGE_NOT_FOUND', 'This page has not been published.');
+  sendData(response, page);
+}));
+
+contentRouter.use('/admin', requireAuth, requireRole(...ADMIN_ROLES));
+contentRouter.get('/admin/overview', asyncHandler(async (_request, response) => {
+  const [settings, faqs, gallery, testimonials, pages] = await Promise.all([
+    SiteSettings.findOne({ key: 'public' }).lean(), Faq.find().sort({ category: 1, sortOrder: 1 }).lean(),
+    GalleryItem.find().sort({ createdAt: -1 }).lean(), Testimonial.find().sort({ createdAt: -1 }).lean(), ContentPage.find().sort({ slug: 1 }).lean(),
+  ]);
+  sendData(response, { settings, faqs, gallery, testimonials, pages, storageProvider: storageProvider.name });
+}));
+
+const settingsSchema = z.object({
+  contact: z.object({ phone: z.string().trim().max(30), whatsapp: z.string().trim().max(30), email: z.string().trim().email().or(z.literal('')), addressLines: z.array(z.string().trim().max(150)).max(4), city: z.string().trim().max(80), state: z.string().trim().max(80), pinCode: z.string().trim().max(12), officeHours: z.string().trim().max(150) }),
+  legal: z.object({ legalName: z.string().trim().min(2).max(150), registrationNumber: z.string().trim().max(100), gstNumber: z.string().trim().max(100), regulatoryDisclosure: z.string().trim().max(2000), providerRelationship: z.string().trim().min(20).max(2000) }),
+  cashback: z.object({ enabled: z.boolean(), terms: z.string().trim().max(2000) }),
+  social: z.object({ facebook: z.string().trim().url().or(z.literal('')), instagram: z.string().trim().url().or(z.literal('')), linkedin: z.string().trim().url().or(z.literal('')), youtube: z.string().trim().url().or(z.literal('')) }),
+});
+contentRouter.patch('/admin/settings', requireCsrf, validate(settingsSchema), asyncHandler(async (request, response) => sendData(response, await SiteSettings.findOneAndUpdate({ key: 'public' }, { $set: { ...request.body, updatedBy: request.user._id } }, { new: true, upsert: true, runValidators: true }))));
+
+const faqSchema = z.object({ category: z.string().trim().min(2).max(80), question: z.string().trim().min(5).max(300), answer: z.string().trim().min(10).max(3000), status, sortOrder: z.coerce.number().int().min(0).max(10_000).default(0) });
+contentRouter.post('/admin/faqs', requireCsrf, validate(faqSchema), asyncHandler(async (request, response) => sendData(response, await Faq.create({ ...request.body, updatedBy: request.user._id }), 201)));
+contentRouter.patch('/admin/faqs/:id', requireCsrf, validate(faqSchema.partial()), asyncHandler(async (request, response) => { const item = await Faq.findByIdAndUpdate(request.params.id, { $set: { ...request.body, updatedBy: request.user._id } }, { new: true, runValidators: true }); if (!item) throw new ApiError(404, 'FAQ_NOT_FOUND', 'FAQ not found.'); sendData(response, item); }));
+
+const galleryStatusSchema = z.object({ status, sortOrder: z.coerce.number().int().min(0).max(10_000).optional() });
+contentRouter.post('/admin/gallery', requireCsrf, upload.single('image'), asyncHandler(async (request, response) => {
+  if (!request.file) throw new ApiError(422, 'IMAGE_REQUIRED', 'Choose a JPG, PNG, or WebP image up to 8 MB.');
+  let media;
+  try { media = await storageProvider.upload(request.file.path, { folder: 'vfs-groups/gallery', sensitive: false }); }
+  finally { await unlink(request.file.path).catch(() => {}); }
+  const consentConfirmed = request.body.consentConfirmed === 'true';
+  if (!consentConfirmed) throw new ApiError(422, 'CONSENT_REQUIRED', 'Confirm that VFS Groups has permission to publish this image.');
+  const item = await GalleryItem.create({ title: String(request.body.title || '').trim(), caption: String(request.body.caption || '').trim(), altText: String(request.body.altText || '').trim(), category: String(request.body.category || 'Company').trim(), status: request.body.status === 'published' ? 'published' : 'draft', consentConfirmed, capturedAt: request.body.capturedAt || undefined, media, updatedBy: request.user._id });
+  sendData(response, item, 201);
+}));
+contentRouter.patch('/admin/gallery/:id', requireCsrf, validate(galleryStatusSchema), asyncHandler(async (request, response) => { const item = await GalleryItem.findByIdAndUpdate(request.params.id, { $set: { ...request.body, updatedBy: request.user._id } }, { new: true, runValidators: true }); if (!item) throw new ApiError(404, 'GALLERY_ITEM_NOT_FOUND', 'Gallery item not found.'); sendData(response, item); }));
+
+const testimonialSchema = z.object({ customerName: z.string().trim().min(2).max(100), customerLabel: z.string().trim().max(100).default(''), serviceName: z.string().trim().max(150).default(''), quote: z.string().trim().min(20).max(1500), consentConfirmed: z.literal(true), status, sortOrder: z.coerce.number().int().min(0).max(10_000).default(0) });
+contentRouter.post('/admin/testimonials', requireCsrf, validate(testimonialSchema), asyncHandler(async (request, response) => sendData(response, await Testimonial.create({ ...request.body, verifiedAt: new Date(), updatedBy: request.user._id }), 201)));
+contentRouter.patch('/admin/testimonials/:id', requireCsrf, validate(testimonialSchema.partial()), asyncHandler(async (request, response) => { const values = { ...request.body, updatedBy: request.user._id }; if (request.body.consentConfirmed) values.verifiedAt = new Date(); const item = await Testimonial.findByIdAndUpdate(request.params.id, { $set: values }, { new: true, runValidators: true }); if (!item) throw new ApiError(404, 'TESTIMONIAL_NOT_FOUND', 'Testimonial not found.'); sendData(response, item); }));
+
+const sectionSchema = z.object({ heading: z.string().trim().min(2).max(200), body: z.string().trim().max(5000).default(''), bullets: z.array(z.string().trim().min(2).max(500)).max(20).default([]) });
+const pageSchema = z.object({ eyebrow: z.string().trim().min(2).max(100), title: z.string().trim().min(3).max(250), summary: z.string().trim().min(10).max(2000), sections: z.array(sectionSchema).max(30), status, seo: z.object({ title: z.string().trim().min(3).max(180), description: z.string().trim().min(10).max(300) }) });
+contentRouter.put('/admin/pages/:slug', requireCsrf, validate(pageSchema), asyncHandler(async (request, response) => sendData(response, await ContentPage.findOneAndUpdate({ slug: request.params.slug }, { $set: { ...request.body, reviewedAt: new Date(), updatedBy: request.user._id } }, { new: true, upsert: true, runValidators: true }))));
+
+contentRouter.get('/admin/analytics/summary', asyncHandler(async (_request, response) => {
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const [totalEvents, byType, topPaths] = await Promise.all([
+    AnalyticsEvent.countDocuments({ createdAt: { $gte: since } }),
+    AnalyticsEvent.aggregate([{ $match: { createdAt: { $gte: since } } }, { $group: { _id: '$eventType', count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
+    AnalyticsEvent.aggregate([{ $match: { createdAt: { $gte: since }, eventType: 'page_view' } }, { $group: { _id: '$path', views: { $sum: 1 } } }, { $sort: { views: -1 } }, { $limit: 10 }]),
+  ]);
+  sendData(response, { periodDays: 30, totalEvents, byType, topPaths });
+}));

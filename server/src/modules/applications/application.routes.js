@@ -1,13 +1,23 @@
+import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
+import { unlink } from 'node:fs/promises';
+import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
+import multer from 'multer';
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
+import { env } from '../../config/env.js';
 import { validate } from '../../middleware/validate.js';
-import { Application } from '../../models/Application.js';
+import { Application, APPLICATION_STATUSES } from '../../models/Application.js';
+import { ApplicationDocument } from '../../models/ApplicationDocument.js';
 import { ApplicationStatusHistory } from '../../models/ApplicationStatusHistory.js';
 import { AuditLog } from '../../models/AuditLog.js';
 import { Contractor } from '../../models/Contractor.js';
 import { Service } from '../../models/Service.js';
+import { VerificationChallenge } from '../../models/VerificationChallenge.js';
+import { mayDisplayMockOtp, smsProvider } from '../../providers/sms.js';
+import { storageProvider } from '../../providers/storage.js';
 import { ApiError } from '../../utils/apiError.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { sendData } from '../../utils/apiResponse.js';
@@ -15,30 +25,122 @@ import { nextPublicId } from '../../utils/identifiers.js';
 
 export const applicationRouter = Router();
 const mobile = z.string().trim().regex(/^\+?[1-9]\d{9,14}$/);
-const schema = z.object({
-  service: z.string().regex(/^[a-f\d]{24}$/i),
+const objectId = z.string().regex(/^[a-f\d]{24}$/i);
+const submissionSchema = z.object({
+  service: objectId,
   personal: z.object({ fullName: z.string().trim().min(2).max(100), mobile, email: z.string().trim().email().toLowerCase(), dateOfBirth: z.coerce.date().max(new Date()), city: z.string().trim().min(2).max(80), state: z.string().trim().min(2).max(80), pinCode: z.string().trim().regex(/^\d{6}$/) }),
   financial: z.object({ employmentType: z.enum(['salaried','self_employed','business','other']), employerOrBusinessName: z.string().trim().max(150).optional(), monthlyIncome: z.coerce.number().min(0).max(1_000_000_000).optional(), annualTurnover: z.coerce.number().min(0).max(100_000_000_000).optional(), existingEmi: z.coerce.number().min(0).max(1_000_000_000).default(0), requestedAmount: z.coerce.number().positive().max(100_000_000_000), itrStatus: z.enum(['available','not_available','not_sure']).optional(), creditProfile: z.enum(['low','fair','good','not_sure']).optional() }),
   serviceSpecific: z.record(z.string().max(1000)).default({}), referralCode: z.string().trim().toUpperCase().max(40).optional().or(z.literal('')),
-  consents: z.object({ privacy: z.literal(true), communication: z.boolean(), accuracy: z.literal(true), terms: z.literal(true) }), website: z.string().max(0).optional(),
+  consents: z.object({ privacy: z.literal(true), communication: z.boolean(), accuracy: z.literal(true), terms: z.literal(true) }),
+  draftId: objectId.optional(), website: z.string().max(0).optional(),
 });
+const draftSchema = z.object({
+  service: objectId,
+  personal: z.object({ fullName: z.string().trim().max(100).optional(), mobile: z.string().trim().max(20).optional(), email: z.string().trim().max(150).optional(), dateOfBirth: z.string().trim().max(30).optional(), city: z.string().trim().max(80).optional(), state: z.string().trim().max(80).optional(), pinCode: z.string().trim().max(12).optional() }).default({}),
+  financial: z.object({ employmentType: z.string().trim().max(40).optional(), employerOrBusinessName: z.string().trim().max(150).optional(), monthlyIncome: z.coerce.number().min(0).max(1_000_000_000).optional(), annualTurnover: z.coerce.number().min(0).max(100_000_000_000).optional(), existingEmi: z.coerce.number().min(0).max(1_000_000_000).optional(), requestedAmount: z.coerce.number().min(0).max(100_000_000_000).optional(), itrStatus: z.string().trim().max(40).optional(), creditProfile: z.string().trim().max(40).optional() }).default({}),
+  serviceSpecific: z.record(z.string().max(1000)).default({}), referralCode: z.string().trim().toUpperCase().max(40).optional(), consents: z.record(z.boolean()).optional(),
+});
+const draftLimit = rateLimit({ windowMs: 60 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false });
 
-applicationRouter.post('/public/submit', rateLimit({ windowMs: 60 * 60 * 1000, limit: 8, standardHeaders: true, legacyHeaders: false }), validate(schema), asyncHandler(async (request, response) => {
-  const input = { ...request.body }; delete input.website;
-  const service = await Service.findOne({ _id: input.service, status: 'published' }).select('_id');
-  if (!service) throw new ApiError(422, 'SERVICE_UNAVAILABLE', 'Choose an available service.');
+applicationRouter.post('/public/drafts', draftLimit, validate(draftSchema), asyncHandler(async (request, response) => {
+  await ensurePublishedService(request.body.service);
+  const resumeToken = randomBytes(32).toString('hex');
+  const application = await Application.create({ ...cleanObject(request.body), status: 'draft', resumeTokenHash: hash(resumeToken), draftExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) });
+  sendData(response, { draftId: application.id, resumeToken, expiresAt: application.draftExpiresAt, message: 'Your draft was saved securely for 30 days on this device.' }, 201);
+}));
+
+applicationRouter.get('/public/drafts/:id', draftLimit, asyncHandler(async (request, response) => {
+  const draft = await authenticatedDraft(request.params.id, request.get('x-resume-token'));
+  sendData(response, { draftId: draft.id, service: draft.service, personal: draft.personal, financial: draft.financial, serviceSpecific: draft.serviceSpecific, referralCode: draft.referralCode, consents: draft.consents, expiresAt: draft.draftExpiresAt });
+}));
+
+applicationRouter.patch('/public/drafts/:id', draftLimit, validate(draftSchema), asyncHandler(async (request, response) => {
+  const draft = await authenticatedDraft(request.params.id, request.get('x-resume-token'));
+  await ensurePublishedService(request.body.service);
+  Object.assign(draft, cleanObject(request.body), { draftExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) });
+  await draft.save();
+  sendData(response, { draftId: draft.id, expiresAt: draft.draftExpiresAt, message: 'Draft updated.' });
+}));
+
+applicationRouter.post('/public/submit', rateLimit({ windowMs: 60 * 60 * 1000, limit: 8, standardHeaders: true, legacyHeaders: false }), validate(submissionSchema), asyncHandler(async (request, response) => {
+  const input = { ...request.body }; delete input.website; const draftId = input.draftId; delete input.draftId;
+  const service = await ensurePublishedService(input.service);
   const contractor = input.referralCode ? await Contractor.findOne({ referralCode: input.referralCode, onboardingStatus: 'approved' }).select('_id referralCode') : null;
   if (input.referralCode && !contractor) throw new ApiError(422, 'REFERRAL_INVALID', 'The referral code is not valid or active.');
+  const existingDraft = draftId ? await authenticatedDraft(draftId, request.get('x-resume-token')) : null;
 
   const session = await mongoose.startSession(); let application;
   try {
     await session.withTransaction(async () => {
-      const now = new Date();
-      const [created] = await Application.create([{ applicationId: await nextPublicId('application', session), leadId: await nextPublicId('lead', session), service: service._id, contractor: contractor?._id, referralCode: contractor?.referralCode, referralLockedAt: contractor ? now : undefined, personal: input.personal, financial: input.financial, serviceSpecific: input.serviceSpecific, consents: { ...input.consents, capturedAt: now, ip: request.ip, userAgent: request.get('user-agent') }, status: 'submitted', submittedAt: now }], { session });
-      application = created;
+      const now = new Date(); const identifiers = { applicationId: await nextPublicId('application', session), leadId: await nextPublicId('lead', session) };
+      const values = { ...input, ...identifiers, service: service._id, contractor: contractor?._id, referralCode: contractor?.referralCode, referralLockedAt: contractor ? now : undefined, consents: { ...input.consents, capturedAt: now, ip: request.ip, userAgent: request.get('user-agent') }, status: 'submitted', submittedAt: now };
+      if (existingDraft) application = await Application.findOneAndUpdate({ _id: existingDraft._id, status: 'draft' }, { $set: values, $unset: { resumeTokenHash: 1, draftExpiresAt: 1, ...(!contractor ? { contractor: 1, referralCode: 1, referralLockedAt: 1 } : {}) } }, { new: true, session, runValidators: true });
+      else [application] = await Application.create([values], { session });
+      if (!application) throw new ApiError(409, 'DRAFT_ALREADY_SUBMITTED', 'This draft has already been submitted.');
       await ApplicationStatusHistory.create([{ application: application._id, newStatus: 'submitted', changedByRole: 'public_applicant', publicNote: 'Your application was submitted to VFS Groups for an initial completeness review.', reason: 'Public application submission' }], { session });
       await AuditLog.create([{ action: 'application.public.submitted', resourceType: 'Application', resourceId: application._id, newValues: { status: 'submitted', referralCode: contractor?.referralCode }, ip: request.ip, userAgent: request.get('user-agent'), requestId: request.id }], { session });
     });
   } finally { await session.endSession(); }
   sendData(response, { applicationId: application.applicationId, leadId: application.leadId, status: application.status, submittedAt: application.submittedAt, acknowledgement: 'Your application has been received for an initial completeness review. This is not an approval or offer.' }, 201);
 }));
+
+const trackingRequestSchema = z.object({ applicationId: z.string().trim().regex(/^VFS-APP-\d{4}-\d{6}$/i), mobile });
+applicationRouter.post('/public/track/request', rateLimit({ windowMs: 10 * 60 * 1000, limit: 6, standardHeaders: true, legacyHeaders: false }), validate(trackingRequestSchema), asyncHandler(async (request, response) => {
+  const mobileValue = request.body.mobile.trim();
+  const application = await Application.findOne({ applicationId: request.body.applicationId.toUpperCase(), 'personal.mobile': { $in: [mobileValue, mobileValue.replace(/^\+/, ''), `+${mobileValue.replace(/^\+/, '')}`] }, status: { $ne: 'draft' } }).select('_id personal.mobile');
+  const code = String(randomInt(100000, 1000000));
+  const challenge = await VerificationChallenge.create({ purpose: 'application_tracking', application: application?._id, codeHash: hash(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000) });
+  if (application) await smsProvider.sendVerificationCode(application.personal.mobile, code, { purpose: 'application_tracking' });
+  sendData(response, { challengeId: challenge.id, expiresInSeconds: 600, message: application ? 'A verification code was sent using the configured messaging provider.' : 'If those details match an application, a verification code has been issued.', ...(mayDisplayMockOtp ? { mockCode: code, mockProvider: true } : {}) }, 202);
+}));
+
+const trackingVerifySchema = z.object({ challengeId: objectId, code: z.string().trim().regex(/^\d{6}$/) });
+applicationRouter.post('/public/track/verify', rateLimit({ windowMs: 10 * 60 * 1000, limit: 15, standardHeaders: true, legacyHeaders: false }), validate(trackingVerifySchema), asyncHandler(async (request, response) => {
+  const challenge = await VerificationChallenge.findById(request.body.challengeId).select('+codeHash');
+  if (!challenge || challenge.verifiedAt || challenge.expiresAt <= new Date() || challenge.attempts >= 5) throw new ApiError(422, 'VERIFICATION_INVALID', 'The verification code is invalid or expired.');
+  challenge.attempts += 1;
+  if (!safeEqual(challenge.codeHash, hash(request.body.code)) || !challenge.application) { await challenge.save(); throw new ApiError(422, 'VERIFICATION_INVALID', 'The verification code is invalid or expired.'); }
+  challenge.verifiedAt = new Date(); await challenge.save();
+  const trackToken = jwt.sign({ sub: String(challenge.application), scope: 'application:track' }, env.JWT_ACCESS_SECRET, { expiresIn: '15m' });
+  const snapshot = await trackingSnapshot(challenge.application);
+  sendData(response, { trackToken, expiresInSeconds: 900, application: snapshot });
+}));
+
+applicationRouter.get('/public/track/:applicationId', asyncHandler(async (request, response) => {
+  const applicationId = verifyTrackingToken(request, request.params.applicationId);
+  sendData(response, await trackingSnapshot(applicationId, request.params.applicationId));
+}));
+
+const uploadDirectory = '/tmp/vfs-groups-documents'; mkdirSync(uploadDirectory, { recursive: true });
+const documentUpload = multer({ dest: uploadDirectory, limits: { fileSize: 8 * 1024 * 1024 }, fileFilter(_request, file, callback) { callback(null, ['application/pdf', 'image/jpeg', 'image/png'].includes(file.mimetype)); } });
+applicationRouter.post('/public/track/:applicationId/documents', documentUpload.single('document'), asyncHandler(async (request, response) => {
+  const applicationObjectId = verifyTrackingToken(request, request.params.applicationId);
+  if (!request.file) throw new ApiError(422, 'DOCUMENT_REQUIRED', 'Choose a PDF, JPG, or PNG document up to 8 MB.');
+  const application = await Application.findOne({ _id: applicationObjectId, applicationId: request.params.applicationId.toUpperCase() });
+  if (!application) { await unlink(request.file.path).catch(() => {}); throw new ApiError(403, 'TRACKING_TOKEN_INVALID', 'This tracking session does not match the application.'); }
+  let stored;
+  try { stored = await storageProvider.upload(request.file.path, { folder: `vfs-groups/applications/${request.params.applicationId}`, sensitive: true }); }
+  finally { await unlink(request.file.path).catch(() => {}); }
+  const category = ['identity','address','income','bank_statement','property','vehicle','insurance','investment','other'].includes(request.body.category) ? request.body.category : 'other';
+  const document = await ApplicationDocument.create({ application: applicationObjectId, category, originalName: request.file.originalname, mimeType: request.file.mimetype, size: request.file.size, storage: stored, uploadedByRole: 'verified_applicant' });
+  if (['documents_pending', 'additional_information_required'].includes(application.status)) {
+    const oldStatus = application.status; application.status = 'documents_received'; await application.save();
+    await ApplicationStatusHistory.create({ application: application._id, oldStatus, newStatus: 'documents_received', changedByRole: 'verified_applicant', publicNote: 'Requested documents were uploaded securely and are awaiting review.', reason: 'Verified applicant document upload' });
+  }
+  sendData(response, { id: document.id, originalName: document.originalName, category: document.category, status: document.status, uploadedAt: document.createdAt }, 201);
+}));
+
+async function ensurePublishedService(id) { const service = await Service.findOne({ _id: id, status: 'published' }).select('_id'); if (!service) throw new ApiError(422, 'SERVICE_UNAVAILABLE', 'Choose an available service.'); return service; }
+function hash(value) { return createHash('sha256').update(String(value)).digest('hex'); }
+function safeEqual(left, right) { const a = Buffer.from(left); const b = Buffer.from(right); return a.length === b.length && timingSafeEqual(a, b); }
+function cleanObject(value) { if (Array.isArray(value)) return value.map(cleanObject); if (!value || typeof value !== 'object') return value; return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== '' && item !== null && item !== undefined && !(typeof item === 'number' && Number.isNaN(item))).map(([key, item]) => [key, cleanObject(item)])); }
+async function authenticatedDraft(id, token) { if (!token) throw new ApiError(401, 'DRAFT_TOKEN_REQUIRED', 'The draft resume token is missing.'); const draft = await Application.findOne({ _id: id, status: 'draft', draftExpiresAt: { $gt: new Date() } }).select('+resumeTokenHash'); if (!draft || !safeEqual(draft.resumeTokenHash || '', hash(token))) throw new ApiError(404, 'DRAFT_NOT_FOUND', 'This saved draft is unavailable or expired.'); return draft; }
+function verifyTrackingToken(request, _publicId) { const token = request.get('x-tracking-token'); if (!token) throw new ApiError(401, 'TRACKING_VERIFICATION_REQUIRED', 'Verify the application before viewing it.'); let payload; try { payload = jwt.verify(token, env.JWT_ACCESS_SECRET); } catch { throw new ApiError(401, 'TRACKING_SESSION_EXPIRED', 'Your tracking session expired. Verify again.'); } if (payload.scope !== 'application:track') throw new ApiError(403, 'TRACKING_TOKEN_INVALID', 'This tracking session is invalid.'); return payload.sub; }
+async function trackingSnapshot(applicationObjectId, expectedPublicId) {
+  const application = await Application.findOne({ _id: applicationObjectId, ...(expectedPublicId ? { applicationId: expectedPublicId.toUpperCase() } : {}) }).populate('service', 'name slug category').lean();
+  if (!application || !application.applicationId) throw new ApiError(404, 'APPLICATION_NOT_FOUND', 'Application not found.');
+  const [history, documents] = await Promise.all([ApplicationStatusHistory.find({ application: application._id }).select('oldStatus newStatus publicNote createdAt').sort({ createdAt: 1 }).lean(), ApplicationDocument.find({ application: application._id }).select('originalName category status createdAt').sort({ createdAt: -1 }).lean()]);
+  return { applicationId: application.applicationId, leadId: application.leadId, service: application.service, status: application.status, applicant: { fullName: application.personal?.fullName, mobileLast4: application.personal?.mobile?.slice(-4) }, submittedAt: application.submittedAt, history, documents };
+}
+
+export { APPLICATION_STATUSES };

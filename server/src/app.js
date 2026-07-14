@@ -17,6 +17,8 @@ import { dashboardRouter } from './modules/dashboard/dashboard.routes.js';
 import { loanReferralRouter } from './modules/loanReferrals/loanReferral.routes.js';
 import { serviceRouter } from './modules/services/service.routes.js';
 import { toolRouter } from './modules/services/tool.routes.js';
+import { contentRouter } from './modules/content/content.routes.js';
+import { analyticsRouter } from './modules/analytics/analytics.routes.js';
 
 export function createApp() {
   const app = express();
@@ -40,6 +42,8 @@ export function createApp() {
   app.use('/api/v1/chat', chatRouter);
   app.use('/api/v1/dashboard', dashboardRouter);
   app.use('/api/v1/loan-referrals', loanReferralRouter);
+  app.use('/api/v1/content', contentRouter);
+  app.use('/api/v1/analytics', analyticsRouter);
   app.use(notFound);
   app.use(errorHandler);
   return app;

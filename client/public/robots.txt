@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /customer/dashboard
+Disallow: /contractor/dashboard
+
+Sitemap: https://vfs-groups.netlify.app/sitemap.xml
