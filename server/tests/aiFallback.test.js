@@ -25,6 +25,12 @@ describe('AI fallback responses', () => {
     expect(answer).toContain('business needs');
   });
 
+  it('understands simple shorthand and common spelling mistakes', () => {
+    const answer = buildFallbackResponse({ message: 'pls tel abt bussiness lon', knowledge });
+    expect(answer).toContain('Business Loans');
+    expect(answer).toContain('business needs');
+  });
+
   it('prompts for a concrete goal when no published topic matches', () => {
     const answer = buildFallbackResponse({ message: 'Can you help me?', knowledge });
     expect(answer).toContain('Please mention the service or goal');

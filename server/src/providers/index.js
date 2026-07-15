@@ -18,7 +18,7 @@ const mockAi = {
 
 export function buildFallbackResponse({ message, knowledge = '' }) {
   const input = normalize(message); const services = parseKnowledge(knowledge);
-  if (/^(hi|hello|hey|namaste|good\s+(morning|afternoon|evening))[!.\s]*$/.test(input)) return 'Hello! I can help you explore VFS Groups loans, insurance, investments, application steps, common documents, and tracking. What would you like help with?';
+  if (/^(hi+|hello+|hey+|namaste|good\s+(morning|afternoon|evening))(\s+(bro|sir|madam))?[!.\s]*$/.test(input)) return 'Hello! I can help you explore VFS Groups loans, insurance, investments, application steps, common documents, and tracking. What would you like help with?';
   if (hasAny(input, ['cibil', 'credit score', 'itr', 'income tax return'])) return 'VFS Groups accepts assistance requests from salaried and self-employed customers with or without ITRs, including customers with a low or limited CIBIL score. The team reviews the information available, while final eligibility and terms are decided by the relevant lender.';
   if (hasAny(input, ['track', 'tracking', 'application status', 'my status'])) return 'Open “Track application,” enter your VFS application ID and registered mobile, then complete the verification step. After verification you can see the live status timeline and upload requested documents.';
   if (hasAny(input, ['document', 'documents', 'upload', 'paperwork'])) return 'Document requirements depend on the selected service. Common examples include identity, address, available income or business records, and bank statements. Sensitive files are uploaded only after application tracking verification.';
@@ -74,7 +74,15 @@ function categoryAnswer(category, services) {
 }
 
 function tokens(value) { const ignored = new Set(['about', 'after', 'also', 'does', 'from', 'have', 'help', 'need', 'please', 'tell', 'that', 'this', 'what', 'when', 'where', 'which', 'with', 'would', 'your']); return [...new Set(normalize(value).split(/[^a-z0-9]+/).filter((word) => word.length > 3 && !ignored.has(word)))]; }
-function normalize(value = '') { return String(value).toLowerCase().replace(/\s+/g, ' ').trim(); }
+function normalize(value = '') {
+  const corrections = [
+    [/\b(lon|laon|loen)\b/g, 'loan'], [/\b(busines|bussiness)\b/g, 'business'], [/\b(persnal|personel|persnol)\b/g, 'personal'],
+    [/\b(insurence|insurnce)\b/g, 'insurance'], [/\b(doc|docs|documnts)\b/g, 'documents'], [/\b(aply|appaly)\b/g, 'apply'],
+    [/\b(staus|stauts)\b/g, 'status'], [/\b(trak|trck)\b/g, 'track'], [/\b(watsapp|whats\s+app)\b/g, 'whatsapp'],
+    [/\b(abt)\b/g, 'about'], [/\b(hw)\b/g, 'how'], [/\b(wht)\b/g, 'what'], [/\b(pls|plz)\b/g, 'please'],
+  ];
+  return corrections.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), String(value).toLowerCase().normalize('NFKD').replace(/[^a-z0-9\s.!?]/g, ' ')).replace(/\s+/g, ' ').trim();
+}
 function hasAny(input, phrases) { return phrases.some((phrase) => input.includes(phrase)); }
 
 const resilientGemini = {

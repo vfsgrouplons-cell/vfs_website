@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
 import { Role } from '../src/models/Role.js';
 import { Application } from '../src/models/Application.js';
+import { Contractor } from '../src/models/Contractor.js';
 import { Faq } from '../src/models/Faq.js';
 import { Service } from '../src/models/Service.js';
 import { syncInitialAdmin } from '../src/seeds/initialAdmin.js';
@@ -115,6 +116,17 @@ describe('portal authentication flows', () => {
     expect(tracked.status).toBe(200);
     expect(tracked.body.data.history).toHaveLength(1);
   }, 20_000);
+
+  it('validates an approved contractor referral code before application submission', async () => {
+    await Contractor.create({ contractorId: 'VFS-CON-TEST-001', referralCode: 'VFSC123456', user: new mongoose.Types.ObjectId(), onboardingStatus: 'approved' });
+    const valid = await request(app).post('/api/v1/applications/public/referrals/validate').send({ referralCode: 'vfsc123456' });
+    expect(valid.status).toBe(200);
+    expect(valid.body.data).toMatchObject({ valid: true, referralCode: 'VFSC123456' });
+
+    const invalid = await request(app).post('/api/v1/applications/public/referrals/validate').send({ referralCode: 'VFSC000000' });
+    expect(invalid.status).toBe(422);
+    expect(invalid.body.error.code).toBe('REFERRAL_INVALID');
+  });
 
   it('publishes only approved FAQ records', async () => {
     await Faq.create([{ category: 'Applications', question: 'Published question?', answer: 'This answer is publicly available.', status: 'published' }, { category: 'Applications', question: 'Draft question?', answer: 'This answer must remain private.', status: 'draft' }]);

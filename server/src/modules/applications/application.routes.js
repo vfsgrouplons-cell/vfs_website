@@ -41,6 +41,8 @@ const draftSchema = z.object({
   serviceSpecific: z.record(z.string().max(1000)).default({}), referralCode: z.string().trim().toUpperCase().max(40).optional(), consents: z.record(z.boolean()).optional(),
 });
 const draftLimit = rateLimit({ windowMs: 60 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false });
+const referralValidationSchema = z.object({ referralCode: z.string().trim().toUpperCase().min(1).max(40) });
+const referralValidationLimit = rateLimit({ windowMs: 60 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false });
 
 applicationRouter.post('/public/drafts', draftLimit, validate(draftSchema), asyncHandler(async (request, response) => {
   await ensurePublishedService(request.body.service);
@@ -60,6 +62,12 @@ applicationRouter.patch('/public/drafts/:id', draftLimit, validate(draftSchema),
   Object.assign(draft, cleanObject(request.body), { draftExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) });
   await draft.save();
   sendData(response, { draftId: draft.id, expiresAt: draft.draftExpiresAt, message: 'Draft updated.' });
+}));
+
+applicationRouter.post('/public/referrals/validate', referralValidationLimit, validate(referralValidationSchema), asyncHandler(async (request, response) => {
+  const contractor = await Contractor.findOne({ referralCode: request.body.referralCode, onboardingStatus: 'approved' }).select('referralCode').lean();
+  if (!contractor) throw new ApiError(422, 'REFERRAL_INVALID', 'This referral code is not valid or active. Check it or remove it to continue.');
+  sendData(response, { valid: true, referralCode: contractor.referralCode });
 }));
 
 applicationRouter.post('/public/submit', rateLimit({ windowMs: 60 * 60 * 1000, limit: 8, standardHeaders: true, legacyHeaders: false }), validate(submissionSchema), asyncHandler(async (request, response) => {
