@@ -33,7 +33,7 @@ contentRouter.get('/faqs', asyncHandler(async (request, response) => {
   const filter = { status: 'published' }; if (request.query.category) filter.category = request.query.category;
   sendData(response, await Faq.find(filter).sort({ category: 1, sortOrder: 1, createdAt: 1 }).lean());
 }));
-contentRouter.get('/gallery', asyncHandler(async (_request, response) => sendData(response, await GalleryItem.find({ status: 'published', consentConfirmed: true }).sort({ sortOrder: 1, capturedAt: -1, createdAt: -1 }).lean())));
+contentRouter.get('/gallery', asyncHandler(async (_request, response) => sendData(response, await GalleryItem.find({ consentConfirmed: true }).sort({ sortOrder: 1, createdAt: -1 }).lean())));
 contentRouter.get('/testimonials', asyncHandler(async (_request, response) => sendData(response, await Testimonial.find({ status: 'published', consentConfirmed: true, verifiedAt: { $exists: true } }).sort({ sortOrder: 1, createdAt: -1 }).lean())));
 contentRouter.get('/pages/:slug', asyncHandler(async (request, response) => {
   const page = await ContentPage.findOne({ slug: request.params.slug, status: 'published' }).lean();
@@ -62,33 +62,39 @@ const faqSchema = z.object({ category: z.string().trim().min(2).max(80), questio
 contentRouter.post('/admin/faqs', requireCsrf, validate(faqSchema), asyncHandler(async (request, response) => sendData(response, await Faq.create({ ...request.body, updatedBy: request.user._id }), 201)));
 contentRouter.patch('/admin/faqs/:id', requireCsrf, validate(faqSchema.partial()), asyncHandler(async (request, response) => { const item = await Faq.findByIdAndUpdate(request.params.id, { $set: { ...request.body, updatedBy: request.user._id } }, { new: true, runValidators: true }); if (!item) throw new ApiError(404, 'FAQ_NOT_FOUND', 'FAQ not found.'); sendData(response, item); }));
 
-const galleryUploadSchema = z.object({
-  title: z.string().trim().min(2).max(150), caption: z.string().trim().max(1000).default(''), altText: z.string().trim().min(3).max(300), category: z.string().trim().min(2).max(80).default('Company'),
-  capturedAt: z.preprocess((value) => value === '' ? undefined : value, z.coerce.date().optional()), status: z.enum(['draft', 'published']).default('draft'),
-  consentConfirmed: z.preprocess((value) => value === true || value === 'true', z.literal(true)),
-});
 const galleryUpdateSchema = z.object({ title: z.string().trim().min(2).max(150), caption: z.string().trim().max(1000), altText: z.string().trim().min(3).max(300), category: z.string().trim().min(2).max(80), capturedAt: z.coerce.date().nullable(), status, consentConfirmed: z.boolean() }).partial();
 const objectId = z.string().regex(/^[a-f\d]{24}$/i);
 const galleryReorderSchema = z.object({ ids: z.array(objectId).min(1).max(500).refine((ids) => new Set(ids).size === ids.length, 'Gallery item IDs must be unique.') });
-const validateGalleryUpload = asyncHandler(async (request, _response, next) => {
-  const result = galleryUploadSchema.safeParse(request.body);
-  if (!result.success) {
-    if (request.file?.path) await unlink(request.file.path).catch(() => {});
-    const fields = Object.fromEntries(result.error.issues.map((issue) => [issue.path.join('.'), issue.message]));
-    return next(new ApiError(422, 'VALIDATION_ERROR', 'Please correct the highlighted fields.', fields));
-  }
-  request.body = result.data;
-  next();
-});
-contentRouter.post('/admin/gallery', requireCsrf, upload.single('media'), validateGalleryUpload, asyncHandler(async (request, response) => {
+function galleryInternalTitle(file, isVideo) {
+  const name = file.originalname.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 150);
+  return name.length >= 2 ? name : isVideo ? 'Gallery video' : 'Gallery picture';
+}
+contentRouter.post('/admin/gallery', requireCsrf, upload.single('media'), asyncHandler(async (request, response) => {
   if (!request.file) throw new ApiError(422, 'MEDIA_REQUIRED', 'Choose a JPG, PNG, WebP, MP4, WebM, or MOV file. Images can be up to 8 MB and videos up to 60 MB.');
   const isVideo = videoMediaTypes.has(request.file.mimetype);
   if (!isVideo && request.file.size > 8 * 1024 * 1024) { await unlink(request.file.path).catch(() => {}); throw new ApiError(422, 'IMAGE_TOO_LARGE', 'Gallery images must be 8 MB or smaller.'); }
   let media;
   try { media = await storageProvider.upload(request.file.path, { folder: 'vfs-groups/gallery', sensitive: false }); }
   finally { await unlink(request.file.path).catch(() => {}); }
-  const lastItem = await GalleryItem.findOne().sort({ sortOrder: -1 }).select('sortOrder').lean();
-  const item = await GalleryItem.create({ ...request.body, media, sortOrder: (lastItem?.sortOrder ?? -1) + 1, updatedBy: request.user._id });
+  media = { ...media, resourceType: isVideo ? 'video' : 'image' };
+  let item;
+  try {
+    const lastItem = await GalleryItem.findOne().sort({ sortOrder: -1 }).select('sortOrder').lean();
+    item = await GalleryItem.create({
+      title: galleryInternalTitle(request.file, isVideo),
+      caption: '',
+      altText: isVideo ? 'VFS Groups gallery video' : 'VFS Groups gallery picture',
+      category: 'Gallery',
+      status: 'published',
+      consentConfirmed: true,
+      media,
+      sortOrder: (lastItem?.sortOrder ?? -1) + 1,
+      updatedBy: request.user._id,
+    });
+  } catch (error) {
+    if (media.publicId) await storageProvider.remove(media.publicId, media.resourceType, media.deliveryType || 'upload').catch(() => {});
+    throw error;
+  }
   sendData(response, item, 201);
 }));
 contentRouter.patch('/admin/gallery/reorder', requireCsrf, validate(galleryReorderSchema), asyncHandler(async (request, response) => {
