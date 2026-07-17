@@ -19,7 +19,7 @@ function cloudinaryStorage() {
       const result = await cloudinary.uploader.upload(path, { resource_type: 'auto', type: options.sensitive === false ? 'upload' : 'authenticated', folder: options.folder || 'vfs-groups', use_filename: false, unique_filename: true, overwrite: false });
       return { provider: 'cloudinary', publicId: result.public_id, version: result.version, resourceType: result.resource_type, deliveryType: result.type, format: result.format, bytes: result.bytes, width: result.width, height: result.height, url: result.secure_url };
     },
-    async remove(publicId, resourceType = 'image') { return cloudinary.uploader.destroy(publicId, { resource_type: resourceType, invalidate: true, type: 'authenticated' }); },
+    async remove(publicId, resourceType = 'image', deliveryType = 'upload') { return cloudinary.uploader.destroy(publicId, { resource_type: resourceType, invalidate: true, type: deliveryType }); },
     signedUrl(publicId, options = {}) { return cloudinary.url(publicId, { type: 'authenticated', sign_url: true, secure: true, resource_type: options.resourceType || 'image', expires_at: Math.floor(Date.now() / 1000) + Math.min(options.expiresInSeconds || 300, 900) }); },
   };
 }

@@ -7,6 +7,7 @@ import { Role } from '../src/models/Role.js';
 import { Application } from '../src/models/Application.js';
 import { Contractor } from '../src/models/Contractor.js';
 import { Faq } from '../src/models/Faq.js';
+import { GalleryItem } from '../src/models/GalleryItem.js';
 import { Service } from '../src/models/Service.js';
 import { syncInitialAdmin } from '../src/seeds/initialAdmin.js';
 
@@ -135,6 +136,34 @@ describe('portal authentication flows', () => {
     expect(response.body.data).toHaveLength(1);
     expect(response.body.data[0].question).toBe('Published question?');
   });
+
+  it('lets administrators reorder gallery media and blocks publication without consent', async () => {
+    const adminRole = await Role.findOne({ slug: 'super-admin' });
+    const config = { INITIAL_ADMIN_NAME: 'Gallery Admin', INITIAL_ADMIN_EMAIL: 'gallery@example.com', INITIAL_ADMIN_MOBILE: '919100000077', INITIAL_ADMIN_PASSWORD: 'GalleryAdminPass123' };
+    await syncInitialAdmin(config, adminRole);
+    const browser = request.agent(app);
+    expect((await browser.post('/api/v1/auth/admin/login').send({ identifier: config.INITIAL_ADMIN_EMAIL, password: config.INITIAL_ADMIN_PASSWORD })).status).toBe(200);
+    const csrf = await browser.get('/api/v1/auth/csrf');
+    const token = csrf.body.data.csrfToken;
+
+    const [first, second, draft] = await GalleryItem.create([
+      { title: 'First image', altText: 'First gallery image', category: 'Office', status: 'published', consentConfirmed: true, sortOrder: 0, media: { resourceType: 'image', url: 'https://example.com/first.jpg' } },
+      { title: 'Second video', altText: 'Second gallery video', category: 'Events', status: 'published', consentConfirmed: true, sortOrder: 1, media: { resourceType: 'video', url: 'https://example.com/second.mp4' } },
+      { title: 'Private draft', altText: 'Private draft media', category: 'Team', status: 'draft', consentConfirmed: false, sortOrder: 2, media: { resourceType: 'image', url: 'https://example.com/draft.jpg' } },
+    ]);
+
+    const reordered = await browser.patch('/api/v1/content/admin/gallery/reorder').set('x-csrf-token', token).send({ ids: [second.id, first.id, draft.id] });
+    expect(reordered.status).toBe(200);
+    expect(reordered.body.data.map((item) => item.title)).toEqual(['Second video', 'First image', 'Private draft']);
+
+    const rejected = await browser.patch(`/api/v1/content/admin/gallery/${draft.id}`).set('x-csrf-token', token).send({ status: 'published' });
+    expect(rejected.status).toBe(422);
+    expect(rejected.body.error.code).toBe('GALLERY_CONSENT_REQUIRED');
+
+    const publicGallery = await request(app).get('/api/v1/content/gallery');
+    expect(publicGallery.status).toBe(200);
+    expect(publicGallery.body.data.map((item) => item.title)).toEqual(['Second video', 'First image']);
+  }, 15_000);
 
   it('answers chat greetings through the working mock provider', async () => {
     await Service.create({ name: 'Personal Loans', slug: 'personal-loans', category: 'Loans', shortDescription: 'Personal funding assistance.', overview: 'Guided assistance.', status: 'published', eligibility: ['Salaried and self-employed'], documents: ['Identity proof'], process: ['Share requirement'] });

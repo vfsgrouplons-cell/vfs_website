@@ -20,7 +20,9 @@ import { sendData } from '../../utils/apiResponse.js';
 export const contentRouter = Router();
 const uploadDirectory = '/tmp/vfs-groups-uploads';
 mkdirSync(uploadDirectory, { recursive: true });
-const upload = multer({ dest: uploadDirectory, limits: { fileSize: 8 * 1024 * 1024 }, fileFilter(_request, file, callback) { callback(null, ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)); } });
+const imageMediaTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const videoMediaTypes = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
+const upload = multer({ dest: uploadDirectory, limits: { fileSize: 60 * 1024 * 1024 }, fileFilter(_request, file, callback) { callback(null, imageMediaTypes.has(file.mimetype) || videoMediaTypes.has(file.mimetype)); } });
 const status = z.enum(['draft', 'published', 'archived']);
 
 contentRouter.get('/settings', asyncHandler(async (_request, response) => {
@@ -43,7 +45,7 @@ contentRouter.use('/admin', requireAuth, requireRole(...ADMIN_ROLES));
 contentRouter.get('/admin/overview', asyncHandler(async (_request, response) => {
   const [settings, faqs, gallery, testimonials, pages] = await Promise.all([
     SiteSettings.findOne({ key: 'public' }).lean(), Faq.find().sort({ category: 1, sortOrder: 1 }).lean(),
-    GalleryItem.find().sort({ createdAt: -1 }).lean(), Testimonial.find().sort({ createdAt: -1 }).lean(), ContentPage.find().sort({ slug: 1 }).lean(),
+    GalleryItem.find().sort({ sortOrder: 1, createdAt: -1 }).lean(), Testimonial.find().sort({ createdAt: -1 }).lean(), ContentPage.find().sort({ slug: 1 }).lean(),
   ]);
   sendData(response, { settings, faqs, gallery, testimonials, pages, storageProvider: storageProvider.name });
 }));
@@ -60,18 +62,58 @@ const faqSchema = z.object({ category: z.string().trim().min(2).max(80), questio
 contentRouter.post('/admin/faqs', requireCsrf, validate(faqSchema), asyncHandler(async (request, response) => sendData(response, await Faq.create({ ...request.body, updatedBy: request.user._id }), 201)));
 contentRouter.patch('/admin/faqs/:id', requireCsrf, validate(faqSchema.partial()), asyncHandler(async (request, response) => { const item = await Faq.findByIdAndUpdate(request.params.id, { $set: { ...request.body, updatedBy: request.user._id } }, { new: true, runValidators: true }); if (!item) throw new ApiError(404, 'FAQ_NOT_FOUND', 'FAQ not found.'); sendData(response, item); }));
 
-const galleryStatusSchema = z.object({ status, sortOrder: z.coerce.number().int().min(0).max(10_000).optional() });
-contentRouter.post('/admin/gallery', requireCsrf, upload.single('image'), asyncHandler(async (request, response) => {
-  if (!request.file) throw new ApiError(422, 'IMAGE_REQUIRED', 'Choose a JPG, PNG, or WebP image up to 8 MB.');
+const galleryUploadSchema = z.object({
+  title: z.string().trim().min(2).max(150), caption: z.string().trim().max(1000).default(''), altText: z.string().trim().min(3).max(300), category: z.string().trim().min(2).max(80).default('Company'),
+  capturedAt: z.preprocess((value) => value === '' ? undefined : value, z.coerce.date().optional()), status: z.enum(['draft', 'published']).default('draft'),
+  consentConfirmed: z.preprocess((value) => value === true || value === 'true', z.literal(true)),
+});
+const galleryUpdateSchema = z.object({ title: z.string().trim().min(2).max(150), caption: z.string().trim().max(1000), altText: z.string().trim().min(3).max(300), category: z.string().trim().min(2).max(80), capturedAt: z.coerce.date().nullable(), status, consentConfirmed: z.boolean() }).partial();
+const objectId = z.string().regex(/^[a-f\d]{24}$/i);
+const galleryReorderSchema = z.object({ ids: z.array(objectId).min(1).max(500).refine((ids) => new Set(ids).size === ids.length, 'Gallery item IDs must be unique.') });
+const validateGalleryUpload = asyncHandler(async (request, _response, next) => {
+  const result = galleryUploadSchema.safeParse(request.body);
+  if (!result.success) {
+    if (request.file?.path) await unlink(request.file.path).catch(() => {});
+    const fields = Object.fromEntries(result.error.issues.map((issue) => [issue.path.join('.'), issue.message]));
+    return next(new ApiError(422, 'VALIDATION_ERROR', 'Please correct the highlighted fields.', fields));
+  }
+  request.body = result.data;
+  next();
+});
+contentRouter.post('/admin/gallery', requireCsrf, upload.single('media'), validateGalleryUpload, asyncHandler(async (request, response) => {
+  if (!request.file) throw new ApiError(422, 'MEDIA_REQUIRED', 'Choose a JPG, PNG, WebP, MP4, WebM, or MOV file. Images can be up to 8 MB and videos up to 60 MB.');
+  const isVideo = videoMediaTypes.has(request.file.mimetype);
+  if (!isVideo && request.file.size > 8 * 1024 * 1024) { await unlink(request.file.path).catch(() => {}); throw new ApiError(422, 'IMAGE_TOO_LARGE', 'Gallery images must be 8 MB or smaller.'); }
   let media;
   try { media = await storageProvider.upload(request.file.path, { folder: 'vfs-groups/gallery', sensitive: false }); }
   finally { await unlink(request.file.path).catch(() => {}); }
-  const consentConfirmed = request.body.consentConfirmed === 'true';
-  if (!consentConfirmed) throw new ApiError(422, 'CONSENT_REQUIRED', 'Confirm that VFS Groups has permission to publish this image.');
-  const item = await GalleryItem.create({ title: String(request.body.title || '').trim(), caption: String(request.body.caption || '').trim(), altText: String(request.body.altText || '').trim(), category: String(request.body.category || 'Company').trim(), status: request.body.status === 'published' ? 'published' : 'draft', consentConfirmed, capturedAt: request.body.capturedAt || undefined, media, updatedBy: request.user._id });
+  const lastItem = await GalleryItem.findOne().sort({ sortOrder: -1 }).select('sortOrder').lean();
+  const item = await GalleryItem.create({ ...request.body, media, sortOrder: (lastItem?.sortOrder ?? -1) + 1, updatedBy: request.user._id });
   sendData(response, item, 201);
 }));
-contentRouter.patch('/admin/gallery/:id', requireCsrf, validate(galleryStatusSchema), asyncHandler(async (request, response) => { const item = await GalleryItem.findByIdAndUpdate(request.params.id, { $set: { ...request.body, updatedBy: request.user._id } }, { new: true, runValidators: true }); if (!item) throw new ApiError(404, 'GALLERY_ITEM_NOT_FOUND', 'Gallery item not found.'); sendData(response, item); }));
+contentRouter.patch('/admin/gallery/reorder', requireCsrf, validate(galleryReorderSchema), asyncHandler(async (request, response) => {
+  const [matching, total] = await Promise.all([GalleryItem.countDocuments({ _id: { $in: request.body.ids } }), GalleryItem.countDocuments()]);
+  if (matching !== request.body.ids.length || total !== request.body.ids.length) throw new ApiError(422, 'GALLERY_ORDER_INVALID', 'The gallery changed since this page loaded. Refresh and try again.');
+  await GalleryItem.bulkWrite(request.body.ids.map((id, sortOrder) => ({ updateOne: { filter: { _id: id }, update: { $set: { sortOrder, updatedBy: request.user._id } } } })));
+  sendData(response, await GalleryItem.find().sort({ sortOrder: 1, createdAt: -1 }).lean());
+}));
+contentRouter.patch('/admin/gallery/:id', requireCsrf, validate(galleryUpdateSchema), asyncHandler(async (request, response) => {
+  const existing = await GalleryItem.findById(request.params.id);
+  if (!existing) throw new ApiError(404, 'GALLERY_ITEM_NOT_FOUND', 'Gallery item not found.');
+  const nextStatus = request.body.status ?? existing.status;
+  const nextConsent = request.body.consentConfirmed ?? existing.consentConfirmed;
+  if (nextStatus === 'published' && !nextConsent) throw new ApiError(422, 'GALLERY_CONSENT_REQUIRED', 'Confirm publication permission before publishing this media.');
+  existing.set({ ...request.body, updatedBy: request.user._id });
+  await existing.save();
+  sendData(response, existing);
+}));
+contentRouter.delete('/admin/gallery/:id', requireCsrf, asyncHandler(async (request, response) => {
+  const item = await GalleryItem.findById(request.params.id);
+  if (!item) throw new ApiError(404, 'GALLERY_ITEM_NOT_FOUND', 'Gallery item not found.');
+  if (item.media?.publicId) await storageProvider.remove(item.media.publicId, item.media.resourceType || 'image', item.media.deliveryType || 'upload');
+  await item.deleteOne();
+  sendData(response, { id: request.params.id, deleted: true });
+}));
 
 const testimonialSchema = z.object({ customerName: z.string().trim().min(2).max(100), customerLabel: z.string().trim().max(100).default(''), serviceName: z.string().trim().max(150).default(''), quote: z.string().trim().min(20).max(1500), consentConfirmed: z.literal(true), status, sortOrder: z.coerce.number().int().min(0).max(10_000).default(0) });
 contentRouter.post('/admin/testimonials', requireCsrf, validate(testimonialSchema), asyncHandler(async (request, response) => sendData(response, await Testimonial.create({ ...request.body, verifiedAt: new Date(), updatedBy: request.user._id }), 201)));
