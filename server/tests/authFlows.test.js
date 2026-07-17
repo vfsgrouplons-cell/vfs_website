@@ -3,12 +3,15 @@ import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
+import { AuditLog } from '../src/models/AuditLog.js';
 import { Role } from '../src/models/Role.js';
 import { Application } from '../src/models/Application.js';
 import { Contractor } from '../src/models/Contractor.js';
+import { Customer } from '../src/models/Customer.js';
 import { Faq } from '../src/models/Faq.js';
 import { GalleryItem } from '../src/models/GalleryItem.js';
 import { Service } from '../src/models/Service.js';
+import { User } from '../src/models/User.js';
 import { syncInitialAdmin } from '../src/seeds/initialAdmin.js';
 
 describe('portal authentication flows', () => {
@@ -164,6 +167,52 @@ describe('portal authentication flows', () => {
     expect(publicGallery.status).toBe(200);
     expect(publicGallery.body.data.map((item) => item.title)).toEqual(['Second video', 'First image']);
   }, 15_000);
+
+  it('separates member directories and safely manages customer profile access', async () => {
+    const customerBrowser = request.agent(app);
+    const registered = await customerBrowser.post('/api/v1/auth/customer/register').send({ fullName: 'Original Customer', mobile: '919100000066', email: 'managed@example.com', password: 'ManagedCustomer123', city: 'Hyderabad', state: 'Telangana', referredByCode: '', consent: true });
+    expect(registered.status).toBe(201); const customerId = registered.body.data.user._id;
+    const contractorBrowser = request.agent(app);
+    const contractor = await contractorBrowser.post('/api/v1/auth/contractor/register').send({ fullName: 'Listed Contractor', mobile: '919100000044', email: 'listed-contractor@example.com', password: 'ListedContractor123', city: 'Warangal', state: 'Telangana', businessName: 'Listed Finance Services', referredByCode: '', consent: true });
+    expect(contractor.status).toBe(201);
+
+    const adminRole = await Role.findOne({ slug: 'super-admin' });
+    const config = { INITIAL_ADMIN_NAME: 'Member Admin', INITIAL_ADMIN_EMAIL: 'members@example.com', INITIAL_ADMIN_MOBILE: '919100000055', INITIAL_ADMIN_PASSWORD: 'MemberAdminPass123' };
+    await syncInitialAdmin(config, adminRole);
+    const adminBrowser = request.agent(app);
+    expect((await adminBrowser.post('/api/v1/auth/admin/login').send({ identifier: config.INITIAL_ADMIN_EMAIL, password: config.INITIAL_ADMIN_PASSWORD })).status).toBe(200);
+    const token = (await adminBrowser.get('/api/v1/auth/csrf')).body.data.csrfToken;
+
+    const customers = await adminBrowser.get('/api/v1/dashboard/admin/users?role=customer&page=1&limit=25');
+    expect(customers.status).toBe(200);
+    expect(customers.body.data).toHaveLength(1);
+    expect(customers.body.data[0].profile).toMatchObject({ city: 'Hyderabad', state: 'Telangana' });
+    const contractors = await adminBrowser.get('/api/v1/dashboard/admin/users?role=contractor&page=1&limit=25');
+    expect(contractors.body.data).toHaveLength(1);
+    expect(contractors.body.data[0].profile).toMatchObject({ city: 'Warangal', state: 'Telangana', businessName: 'Listed Finance Services' });
+
+    const details = await adminBrowser.get(`/api/v1/dashboard/admin/users/${customerId}`);
+    expect(details.status).toBe(200);
+    expect(details.body.data.user).toMatchObject({ email: 'managed@example.com', mobile: '919100000066' });
+    expect(details.body.data.profile.customerId).toMatch(/^VFSCU-/);
+
+    const protectedField = await adminBrowser.patch(`/api/v1/dashboard/admin/users/${customerId}`).set('x-csrf-token', token).send({ fullName: 'Changed Customer', city: 'Vijayawada', state: 'Andhra Pradesh', status: 'active', reason: 'Profile correction', email: 'changed@example.com' });
+    expect(protectedField.status).toBe(422);
+    const changed = await adminBrowser.patch(`/api/v1/dashboard/admin/users/${customerId}`).set('x-csrf-token', token).send({ fullName: 'Changed Customer', city: 'Vijayawada', state: 'Andhra Pradesh', status: 'active', reason: 'Profile correction' });
+    expect(changed.status).toBe(200);
+    expect(changed.body.data.user).toMatchObject({ fullName: 'Changed Customer', email: 'managed@example.com', mobile: '919100000066' });
+    expect(await Customer.findOne({ user: customerId }).lean()).toMatchObject({ city: 'Vijayawada', state: 'Andhra Pradesh' });
+    expect(await AuditLog.countDocuments({ resourceId: customerId, action: 'member.profile.updated' })).toBe(1);
+
+    const removed = await adminBrowser.delete(`/api/v1/dashboard/admin/users/${customerId}`).set('x-csrf-token', token).send({ reason: 'Duplicate test account' });
+    expect(removed.status).toBe(200);
+    expect(removed.body.data).toMatchObject({ removed: true, recordsPreserved: true });
+    expect(await User.findById(customerId).lean()).toMatchObject({ status: 'deleted' });
+    expect(await Customer.exists({ user: customerId })).toBeTruthy();
+    expect((await adminBrowser.get(`/api/v1/dashboard/admin/users/${customerId}`)).status).toBe(404);
+    expect((await customerBrowser.get('/api/v1/dashboard/customer')).status).toBe(401);
+    expect((await adminBrowser.get('/api/v1/dashboard/admin/users?role=customer&page=1&limit=25')).body.data).toHaveLength(0);
+  }, 20_000);
 
   it('answers chat greetings through the working mock provider', async () => {
     await Service.create({ name: 'Personal Loans', slug: 'personal-loans', category: 'Loans', shortDescription: 'Personal funding assistance.', overview: 'Guided assistance.', status: 'published', eligibility: ['Salaried and self-employed'], documents: ['Identity proof'], process: ['Share requirement'] });

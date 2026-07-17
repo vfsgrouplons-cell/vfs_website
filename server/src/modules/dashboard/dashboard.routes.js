@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import { z } from 'zod';
 import { ADMIN_ROLES, requireAuth, requireRole } from '../../middleware/auth.js';
 import { requireCsrf } from '../../middleware/csrf.js';
@@ -7,8 +8,11 @@ import { AuditLog } from '../../models/AuditLog.js';
 import { Application, APPLICATION_STATUSES } from '../../models/Application.js';
 import { ApplicationDocument } from '../../models/ApplicationDocument.js';
 import { ApplicationStatusHistory } from '../../models/ApplicationStatusHistory.js';
+import { Contractor } from '../../models/Contractor.js';
+import { Customer } from '../../models/Customer.js';
 import { LoanReferral, LOAN_REFERRAL_STATUSES } from '../../models/LoanReferral.js';
 import { LoginActivity } from '../../models/LoginActivity.js';
+import { RefreshToken } from '../../models/RefreshToken.js';
 import { Role } from '../../models/Role.js';
 import { User } from '../../models/User.js';
 import { ApiError } from '../../utils/apiError.js';
@@ -22,10 +26,10 @@ dashboardRouter.use(requireAuth);
 async function memberDashboard(userId) {
   const [user, referredUsers, recentLogins, loanReferrals, referredCount, loanReferralCount] = await Promise.all([
     User.findById(userId).populate('roles', 'name slug').populate('referredBy', 'fullName referralCode').lean(),
-    User.find({ referredBy: userId }).select('fullName email mobile referralCode referredByCode createdAt roles').populate('roles', 'name slug').sort({ createdAt: -1 }).limit(5).lean(),
+    User.find({ referredBy: userId, status: { $ne: 'deleted' } }).select('fullName email mobile referralCode referredByCode createdAt roles').populate('roles', 'name slug').sort({ createdAt: -1 }).limit(5).lean(),
     LoginActivity.find({ user: userId }).sort({ loginAt: -1 }).limit(5).lean(),
     LoanReferral.find({ submittedBy: userId }).populate('service', 'name slug').sort({ createdAt: -1 }).limit(5).lean(),
-    User.countDocuments({ referredBy: userId }), LoanReferral.countDocuments({ submittedBy: userId }),
+    User.countDocuments({ referredBy: userId, status: { $ne: 'deleted' } }), LoanReferral.countDocuments({ submittedBy: userId }),
   ]);
   return { user, metrics: { successfulLogins: user.successfulLoginCount || 0, registeredThroughCode: referredCount, loanReferralsSubmitted: loanReferralCount }, referredUsers, recentLogins, recentLoanReferrals: loanReferrals };
 }
@@ -44,8 +48,8 @@ function paginatedMemberCollection(collection) {
     const page = Math.max(1, Number(request.query.page) || 1); const limit = Math.min(50, Math.max(5, Number(request.query.limit) || 10)); const skip = (page - 1) * limit; const userId = request.user._id;
     let query; let count;
     if (collection === 'referred-users') {
-      query = User.find({ referredBy: userId }).select('fullName email mobile referralCode referredByCode createdAt roles').populate('roles', 'name slug').sort({ createdAt: -1 });
-      count = User.countDocuments({ referredBy: userId });
+      query = User.find({ referredBy: userId, status: { $ne: 'deleted' } }).select('fullName email mobile referralCode referredByCode createdAt roles').populate('roles', 'name slug').sort({ createdAt: -1 });
+      count = User.countDocuments({ referredBy: userId, status: { $ne: 'deleted' } });
     } else if (collection === 'service-referrals') {
       query = LoanReferral.find({ submittedBy: userId }).populate('service', 'name slug').sort({ createdAt: -1 });
       count = LoanReferral.countDocuments({ submittedBy: userId });
@@ -65,8 +69,8 @@ dashboardRouter.get('/admin', requireRole(...ADMIN_ROLES), asyncHandler(async (_
     User.countDocuments({ roles: customerRole?._id, status: { $ne: 'deleted' } }),
     User.countDocuments({ roles: contractorRole?._id, status: { $ne: 'deleted' } }),
     User.aggregate([{ $group: { _id: null, total: { $sum: '$successfulLoginCount' }, unique: { $sum: { $cond: [{ $gt: ['$successfulLoginCount', 0] }, 1, 0] } } } }]),
-    User.countDocuments({ referredBy: { $exists: true, $ne: null } }), User.countDocuments({ referredBy: { $exists: false } }), User.countDocuments({ referralCode: { $exists: true, $ne: null } }), LoanReferral.countDocuments(),
-    User.find().populate('roles', 'name slug').populate('referredBy', 'fullName referralCode').sort({ createdAt: -1 }).limit(10).lean(),
+    User.countDocuments({ referredBy: { $exists: true, $ne: null }, status: { $ne: 'deleted' } }), User.countDocuments({ referredBy: { $exists: false }, status: { $ne: 'deleted' } }), User.countDocuments({ referralCode: { $exists: true, $ne: null }, status: { $ne: 'deleted' } }), LoanReferral.countDocuments(),
+    User.find({ status: { $ne: 'deleted' } }).populate('roles', 'name slug').populate('referredBy', 'fullName referralCode').sort({ createdAt: -1 }).limit(10).lean(),
     LoginActivity.find().populate('user', 'fullName email mobile referralCode').sort({ loginAt: -1 }).limit(15).lean(),
     LoanReferral.find().populate('submittedBy', 'fullName referralCode').populate('service', 'name').sort({ createdAt: -1 }).limit(15).lean(),
     User.aggregate([{ $match: { referredByCode: { $exists: true, $ne: null } } }, { $group: { _id: '$referredByCode', registrations: { $sum: 1 } } }, { $sort: { registrations: -1 } }, { $limit: 10 }, { $lookup: { from: 'users', localField: '_id', foreignField: 'referralCode', as: 'owner' } }, { $unwind: { path: '$owner', preserveNullAndEmptyArrays: true } }, { $project: { _id: 0, referralCode: '$_id', registrations: 1, owner: { _id: '$owner._id', fullName: '$owner.fullName' } } }]),
@@ -79,7 +83,7 @@ dashboardRouter.get('/admin', requireRole(...ADMIN_ROLES), asyncHandler(async (_
 
 function topReferrers(roleId) {
   if (!roleId) return [];
-  return User.aggregate([{ $match: { referredBy: { $exists: true, $ne: null } } }, { $group: { _id: '$referredBy', registrations: { $sum: 1 } } }, { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'owner' } }, { $unwind: '$owner' }, { $match: { 'owner.roles': roleId } }, { $sort: { registrations: -1 } }, { $limit: 10 }, { $project: { _id: 0, owner: { _id: '$owner._id', fullName: '$owner.fullName', referralCode: '$owner.referralCode' }, registrations: 1 } }]);
+  return User.aggregate([{ $match: { referredBy: { $exists: true, $ne: null }, status: { $ne: 'deleted' } } }, { $group: { _id: '$referredBy', registrations: { $sum: 1 } } }, { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'owner' } }, { $unwind: '$owner' }, { $match: { 'owner.roles': roleId, 'owner.status': { $ne: 'deleted' } } }, { $sort: { registrations: -1 } }, { $limit: 10 }, { $project: { _id: 0, owner: { _id: '$owner._id', fullName: '$owner.fullName', referralCode: '$owner.referralCode' }, registrations: 1 } }]);
 }
 
 dashboardRouter.get('/admin/users', requireRole(...ADMIN_ROLES), asyncHandler(async (request, response) => {
@@ -88,17 +92,69 @@ dashboardRouter.get('/admin/users', requireRole(...ADMIN_ROLES), asyncHandler(as
   if (q) { const regex = new RegExp(escapeRegex(q), 'i'); filter.$or = [{ fullName: regex }, { email: regex }, { mobile: regex }, { referralCode: regex }]; }
   if (request.query.role) { const role = await Role.findOne({ slug: request.query.role }); filter.roles = role?._id || null; }
   const [users, total] = await Promise.all([User.find(filter).populate('roles', 'name slug').populate('referredBy', 'fullName referralCode').sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(), User.countDocuments(filter)]);
-  const ids = users.map((user) => user._id); const [registrationCounts, loanCounts] = await Promise.all([User.aggregate([{ $match: { referredBy: { $in: ids } } }, { $group: { _id: '$referredBy', count: { $sum: 1 } } }]), LoanReferral.aggregate([{ $match: { submittedBy: { $in: ids } } }, { $group: { _id: '$submittedBy', count: { $sum: 1 } } }])]);
+  const ids = users.map((user) => user._id); const [registrationCounts, loanCounts, customerProfiles, contractorProfiles] = await Promise.all([User.aggregate([{ $match: { referredBy: { $in: ids }, status: { $ne: 'deleted' } } }, { $group: { _id: '$referredBy', count: { $sum: 1 } } }]), LoanReferral.aggregate([{ $match: { submittedBy: { $in: ids } } }, { $group: { _id: '$submittedBy', count: { $sum: 1 } } }]), Customer.find({ user: { $in: ids } }).lean(), Contractor.find({ user: { $in: ids } }).lean()]);
   const registrationMap = new Map(registrationCounts.map((item) => [String(item._id), item.count])); const loanMap = new Map(loanCounts.map((item) => [String(item._id), item.count]));
-  sendData(response, users.map((user) => ({ ...user, referredUsersCount: registrationMap.get(String(user._id)) || 0, loanReferralsCount: loanMap.get(String(user._id)) || 0 })), 200, { page, limit, total, pages: Math.ceil(total / limit) });
+  const profileMap = new Map([...customerProfiles, ...contractorProfiles].map((profile) => [String(profile.user), profile]));
+  sendData(response, users.map((user) => ({ ...user, profile: profileMap.get(String(user._id)) || null, referredUsersCount: registrationMap.get(String(user._id)) || 0, loanReferralsCount: loanMap.get(String(user._id)) || 0 })), 200, { page, limit, total, pages: Math.ceil(total / limit) });
 }));
 
 dashboardRouter.get('/admin/users/:id', requireRole(...ADMIN_ROLES), asyncHandler(async (request, response) => {
-  const user = await User.findById(request.params.id).populate('roles', 'name slug').populate('referredBy', 'fullName email mobile referralCode').lean();
+  const user = await User.findOne({ _id: request.params.id, status: { $ne: 'deleted' } }).populate('roles', 'name slug').populate('referredBy', 'fullName email mobile referralCode').lean();
   if (!user) throw new ApiError(404, 'USER_NOT_FOUND', 'User not found.');
-  const [referredUsers, loanReferrals, loginActivity] = await Promise.all([User.find({ referredBy: user._id }).select('fullName email mobile roles referralCode createdAt').populate('roles', 'name slug').sort({ createdAt: -1 }).lean(), LoanReferral.find({ submittedBy: user._id }).populate('service', 'name slug').sort({ createdAt: -1 }).lean(), LoginActivity.find({ user: user._id }).sort({ loginAt: -1 }).limit(50).lean()]);
-  sendData(response, { user, referredUsers, loanReferrals, loginActivity, metrics: { referredUsers: referredUsers.length, loanReferrals: loanReferrals.length, successfulLogins: user.successfulLoginCount || 0 } });
+  const roleSlugs = user.roles.map((role) => role.slug); const Profile = roleSlugs.includes('contractor') ? Contractor : roleSlugs.includes('customer') ? Customer : null;
+  const [profile, referredUsers, loanReferrals, loginActivity] = await Promise.all([Profile ? Profile.findOne({ user: user._id }).lean() : Promise.resolve(null), User.find({ referredBy: user._id, status: { $ne: 'deleted' } }).select('fullName email mobile roles referralCode createdAt').populate('roles', 'name slug').sort({ createdAt: -1 }).lean(), LoanReferral.find({ submittedBy: user._id }).populate('service', 'name slug').sort({ createdAt: -1 }).lean(), LoginActivity.find({ user: user._id }).sort({ loginAt: -1 }).limit(50).lean()]);
+  sendData(response, { user, profile, referredUsers, loanReferrals, loginActivity, metrics: { referredUsers: referredUsers.length, loanReferrals: loanReferrals.length, successfulLogins: user.successfulLoginCount || 0 } });
 }));
+
+const adminUserUpdateSchema = z.object({
+  fullName: z.string().trim().min(2).max(100), city: z.string().trim().max(80), state: z.string().trim().max(80),
+  businessName: z.string().trim().max(150).optional(), status: z.enum(['active', 'suspended']), reason: z.string().trim().min(3).max(500),
+}).strict();
+const adminUserRemoveSchema = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
+
+dashboardRouter.patch('/admin/users/:id', requireRole(...ADMIN_ROLES), requireCsrf, validate(adminUserUpdateSchema), asyncHandler(async (request, response) => {
+  const session = await mongoose.startSession(); let accountType;
+  try {
+    await session.withTransaction(async () => {
+      const user = await editableMember(request.params.id, request.user._id, session); const roleSlugs = user.roles.map((role) => role.slug);
+      accountType = roleSlugs.includes('contractor') ? 'contractor' : 'customer';
+      if (accountType !== 'contractor' && request.body.businessName !== undefined) throw new ApiError(422, 'FIELD_NOT_EDITABLE', 'Business name can only be changed for contractor accounts.');
+      const oldValues = { fullName: user.fullName, status: user.status }; const newValues = { fullName: request.body.fullName, status: request.body.status, city: request.body.city, state: request.body.state };
+      user.fullName = request.body.fullName; user.status = request.body.status; await user.save({ session });
+      const Profile = accountType === 'contractor' ? Contractor : Customer; const profile = await Profile.findOne({ user: user._id }).session(session);
+      if (!profile) throw new ApiError(409, 'MEMBER_PROFILE_MISSING', 'The member profile is missing. Account changes were not saved.');
+      oldValues.city = profile.city || ''; oldValues.state = profile.state || ''; profile.city = request.body.city; profile.state = request.body.state;
+      if (accountType === 'contractor') { oldValues.businessName = profile.businessName || ''; profile.businessName = request.body.businessName || ''; newValues.businessName = profile.businessName; }
+      await profile.save({ session });
+      if (request.body.status === 'suspended') await RefreshToken.updateMany({ user: user._id, revokedAt: null }, { $set: { revokedAt: new Date() } }, { session });
+      await AuditLog.create([{ actor: request.user._id, actorRoles: request.user.roles.map((role) => role.slug), action: 'member.profile.updated', resourceType: 'User', resourceId: user._id, oldValues, newValues, reason: request.body.reason, ip: request.ip, userAgent: request.get('user-agent'), requestId: request.id }], { session });
+    });
+  } finally { await session.endSession(); }
+  const user = await User.findById(request.params.id).populate('roles', 'name slug').lean(); const Profile = accountType === 'contractor' ? Contractor : Customer; const profile = await Profile.findOne({ user: request.params.id }).lean();
+  sendData(response, { user, profile });
+}));
+
+dashboardRouter.delete('/admin/users/:id', requireRole(...ADMIN_ROLES), requireCsrf, validate(adminUserRemoveSchema), asyncHandler(async (request, response) => {
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      const user = await editableMember(request.params.id, request.user._id, session); const oldValues = { fullName: user.fullName, email: user.email, mobile: user.mobile, status: user.status };
+      user.status = 'deleted'; user.deletedAt = new Date(); user.tokenVersion += 1; await user.save({ session });
+      await RefreshToken.updateMany({ user: user._id, revokedAt: null }, { $set: { revokedAt: new Date() } }, { session });
+      await AuditLog.create([{ actor: request.user._id, actorRoles: request.user.roles.map((role) => role.slug), action: 'member.access.removed', resourceType: 'User', resourceId: user._id, oldValues, newValues: { status: 'deleted', recordsPreserved: true }, reason: request.body.reason, ip: request.ip, userAgent: request.get('user-agent'), requestId: request.id }], { session });
+    });
+  } finally { await session.endSession(); }
+  sendData(response, { id: request.params.id, removed: true, recordsPreserved: true });
+}));
+
+async function editableMember(id, actorId, session) {
+  if (String(id) === String(actorId)) throw new ApiError(403, 'SELF_MANAGEMENT_BLOCKED', 'You cannot manage your own administrator account here.');
+  const user = await User.findOne({ _id: id, status: { $ne: 'deleted' } }).select('+tokenVersion').populate('roles', 'name slug').session(session);
+  if (!user) throw new ApiError(404, 'USER_NOT_FOUND', 'User not found.');
+  const roleSlugs = user.roles.map((role) => role.slug);
+  if (roleSlugs.some((role) => ADMIN_ROLES.includes(role)) || !roleSlugs.some((role) => ['customer', 'contractor'].includes(role))) throw new ApiError(403, 'MEMBER_ACCOUNT_REQUIRED', 'Only customer and contractor accounts can be managed here.');
+  return user;
+}
 
 dashboardRouter.get('/admin/referrals/:code', requireRole(...ADMIN_ROLES), asyncHandler(async (request, response) => {
   const owner = await User.findOne({ referralCode: request.params.code.toUpperCase() }).populate('roles', 'name slug').lean();
