@@ -5,7 +5,7 @@ const schema = new mongoose.Schema({
   applicationId: { type: String, unique: true, sparse: true, index: true }, leadId: { type: String, unique: true, sparse: true, index: true },
   customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', index: true }, contractor: { type: mongoose.Schema.Types.ObjectId, ref: 'Contractor', index: true },
   service: { type: mongoose.Schema.Types.ObjectId, ref: 'Service', required: true, index: true }, status: { type: String, enum: APPLICATION_STATUSES, default: 'draft', index: true },
-  personal: { fullName: String, mobile: String, email: String, dateOfBirth: Date, city: String, state: String, pinCode: String },
+  personal: { fullName: String, mobile: String, email: String, dateOfBirth: Date, country: { type: String, default: 'India' }, city: String, state: String, pinCode: String },
   financial: { employmentType: String, employerOrBusinessName: String, monthlyIncome: Number, annualTurnover: Number, existingEmi: Number, requestedAmount: Number, itrStatus: String, creditProfile: String },
   serviceSpecific: mongoose.Schema.Types.Mixed,
   resumeTokenHash: { type: String, select: false }, draftExpiresAt: Date,

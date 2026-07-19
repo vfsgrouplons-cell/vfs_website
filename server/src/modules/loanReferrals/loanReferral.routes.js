@@ -17,7 +17,7 @@ const createSchema = z.object({
   service: z.string().regex(/^[a-f\d]{24}$/i),
   applicant: z.object({
     fullName: z.string().trim().min(2).max(100), mobile: z.string().trim().regex(/^\+?[1-9]\d{9,14}$/),
-    email: z.string().trim().email().toLowerCase().optional().or(z.literal('')), city: z.string().trim().min(2).max(80),
+    email: z.string().trim().email().toLowerCase().optional().or(z.literal('')), country: z.literal('India').default('India'), state: z.string().trim().min(2).max(80), city: z.string().trim().min(2).max(80),
     requestedAmount: z.coerce.number().min(0).max(100_000_000_000).optional(), notes: z.string().trim().max(1500).optional().or(z.literal('')),
   }),
 });

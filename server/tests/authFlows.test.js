@@ -39,8 +39,8 @@ describe('portal authentication flows', () => {
   });
 
   it.each([
-    ['customer', { fullName: 'Test Customer', mobile: '919100000001', email: 'customer@example.com', password: 'CustomerPass123', city: 'Hyderabad', state: 'Telangana', referredByCode: '', consent: true }],
-    ['contractor', { fullName: 'Test Contractor', mobile: '919100000002', email: 'contractor@example.com', password: 'ContractorPass123', city: 'Hyderabad', state: 'Telangana', businessName: 'Test Agency', referredByCode: '', consent: true }],
+    ['customer', { fullName: 'Test Customer', mobile: '919100000001', email: 'customer@gmail.com', password: 'CustomerPass123', country: 'India', city: 'Hyderabad', state: 'Telangana', referredByCode: '', consent: true }],
+    ['contractor', { fullName: 'Test Contractor', mobile: '919100000002', email: 'contractor@gmail.com', password: 'ContractorPass123', country: 'India', city: 'Hyderabad', state: 'Telangana', businessName: 'Test Agency', referredByCode: '', consent: true }],
   ])('creates a %s session that can open its protected dashboard', async (portal, registration) => {
     const browser = request.agent(app);
     const registered = await browser.post(`/api/v1/auth/${portal}/register`).send(registration);
@@ -94,7 +94,7 @@ describe('portal authentication flows', () => {
 
     const submitted = await browser.post('/api/v1/applications/public/submit').set('x-resume-token', draft.body.data.resumeToken).send({
       draftId: draft.body.data.draftId, service: service.id,
-      personal: { fullName: 'Draft Customer', mobile: '919100000099', email: 'draft@example.com', dateOfBirth: '1990-01-01', city: 'Hyderabad', state: 'Telangana', pinCode: '500001' },
+      personal: { fullName: 'Draft Customer', mobile: '919100000099', email: 'draft@example.com', dateOfBirth: '1990-01-01', country: 'India', city: 'Hyderabad', state: 'Telangana', pinCode: '500001' },
       financial: { employmentType: 'salaried', employerOrBusinessName: 'Test Employer', monthlyIncome: 50000, annualTurnover: 0, existingEmi: 0, requestedAmount: 500000, itrStatus: 'not_sure', creditProfile: 'not_sure' },
       serviceSpecific: { requirementSummary: 'Need personal loan guidance' }, referralCode: '', consents: { privacy: true, communication: false, accuracy: true, terms: true }, website: '',
     });
@@ -170,10 +170,10 @@ describe('portal authentication flows', () => {
 
   it('separates member directories and safely manages customer profile access', async () => {
     const customerBrowser = request.agent(app);
-    const registered = await customerBrowser.post('/api/v1/auth/customer/register').send({ fullName: 'Original Customer', mobile: '919100000066', email: 'managed@example.com', password: 'ManagedCustomer123', city: 'Hyderabad', state: 'Telangana', referredByCode: '', consent: true });
+    const registered = await customerBrowser.post('/api/v1/auth/customer/register').send({ fullName: 'Original Customer', mobile: '919100000066', email: 'managed@gmail.com', password: 'ManagedCustomer123', country: 'India', city: 'Hyderabad', state: 'Telangana', referredByCode: '', consent: true });
     expect(registered.status).toBe(201); const customerId = registered.body.data.user._id;
     const contractorBrowser = request.agent(app);
-    const contractor = await contractorBrowser.post('/api/v1/auth/contractor/register').send({ fullName: 'Listed Contractor', mobile: '919100000044', email: 'listed-contractor@example.com', password: 'ListedContractor123', city: 'Warangal', state: 'Telangana', businessName: 'Listed Finance Services', referredByCode: '', consent: true });
+    const contractor = await contractorBrowser.post('/api/v1/auth/contractor/register').send({ fullName: 'Listed Contractor', mobile: '919100000044', email: 'listed-contractor@gmail.com', password: 'ListedContractor123', country: 'India', city: 'Warangal', state: 'Telangana', businessName: 'Listed Finance Services', referredByCode: '', consent: true });
     expect(contractor.status).toBe(201);
 
     const adminRole = await Role.findOne({ slug: 'super-admin' });
@@ -186,22 +186,22 @@ describe('portal authentication flows', () => {
     const customers = await adminBrowser.get('/api/v1/dashboard/admin/users?role=customer&page=1&limit=25');
     expect(customers.status).toBe(200);
     expect(customers.body.data).toHaveLength(1);
-    expect(customers.body.data[0].profile).toMatchObject({ city: 'Hyderabad', state: 'Telangana' });
+    expect(customers.body.data[0].profile).toMatchObject({ country: 'India', city: 'Hyderabad', state: 'Telangana' });
     const contractors = await adminBrowser.get('/api/v1/dashboard/admin/users?role=contractor&page=1&limit=25');
     expect(contractors.body.data).toHaveLength(1);
-    expect(contractors.body.data[0].profile).toMatchObject({ city: 'Warangal', state: 'Telangana', businessName: 'Listed Finance Services' });
+    expect(contractors.body.data[0].profile).toMatchObject({ country: 'India', city: 'Warangal', state: 'Telangana', businessName: 'Listed Finance Services' });
 
     const details = await adminBrowser.get(`/api/v1/dashboard/admin/users/${customerId}`);
     expect(details.status).toBe(200);
-    expect(details.body.data.user).toMatchObject({ email: 'managed@example.com', mobile: '919100000066' });
+    expect(details.body.data.user).toMatchObject({ email: 'managed@gmail.com', mobile: '919100000066' });
     expect(details.body.data.profile.customerId).toMatch(/^VFSCU-/);
 
-    const protectedField = await adminBrowser.patch(`/api/v1/dashboard/admin/users/${customerId}`).set('x-csrf-token', token).send({ fullName: 'Changed Customer', city: 'Vijayawada', state: 'Andhra Pradesh', status: 'active', reason: 'Profile correction', email: 'changed@example.com' });
+    const protectedField = await adminBrowser.patch(`/api/v1/dashboard/admin/users/${customerId}`).set('x-csrf-token', token).send({ fullName: 'Changed Customer', country: 'India', city: 'Vijayawada', state: 'Andhra Pradesh', status: 'active', reason: 'Profile correction', email: 'changed@example.com' });
     expect(protectedField.status).toBe(422);
-    const changed = await adminBrowser.patch(`/api/v1/dashboard/admin/users/${customerId}`).set('x-csrf-token', token).send({ fullName: 'Changed Customer', city: 'Vijayawada', state: 'Andhra Pradesh', status: 'active', reason: 'Profile correction' });
+    const changed = await adminBrowser.patch(`/api/v1/dashboard/admin/users/${customerId}`).set('x-csrf-token', token).send({ fullName: 'Changed Customer', country: 'India', city: 'Vijayawada', state: 'Andhra Pradesh', status: 'active', reason: 'Profile correction' });
     expect(changed.status).toBe(200);
-    expect(changed.body.data.user).toMatchObject({ fullName: 'Changed Customer', email: 'managed@example.com', mobile: '919100000066' });
-    expect(await Customer.findOne({ user: customerId }).lean()).toMatchObject({ city: 'Vijayawada', state: 'Andhra Pradesh' });
+    expect(changed.body.data.user).toMatchObject({ fullName: 'Changed Customer', email: 'managed@gmail.com', mobile: '919100000066' });
+    expect(await Customer.findOne({ user: customerId }).lean()).toMatchObject({ country: 'India', city: 'Vijayawada', state: 'Andhra Pradesh' });
     expect(await AuditLog.countDocuments({ resourceId: customerId, action: 'member.profile.updated' })).toBe(1);
 
     const removed = await adminBrowser.delete(`/api/v1/dashboard/admin/users/${customerId}`).set('x-csrf-token', token).send({ reason: 'Duplicate test account' });

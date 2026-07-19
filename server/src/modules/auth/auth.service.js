@@ -58,9 +58,9 @@ async function registerAccount(input, accountType, request, response) {
       }], { session });
       user = created;
       if (accountType === 'customer') {
-        await Customer.create([{ customerId: await nextPublicId('customer', session), user: user._id, city: input.city, state: input.state }], { session });
+        await Customer.create([{ customerId: await nextPublicId('customer', session), user: user._id, country: input.country, city: input.city, state: input.state }], { session });
       } else {
-        await Contractor.create([{ contractorId: await nextPublicId('contractor', session), referralCode, user: user._id, businessName: input.businessName || undefined, city: input.city, state: input.state, onboardingStatus: 'registered' }], { session });
+        await Contractor.create([{ contractorId: await nextPublicId('contractor', session), referralCode, user: user._id, businessName: input.businessName || undefined, country: input.country, city: input.city, state: input.state, onboardingStatus: 'registered' }], { session });
       }
       await AuditLog.create([{ actor: user._id, actorRoles: [accountType], action: `${accountType}.registered`, resourceType: 'User', resourceId: user._id, newValues: { consent: input.consent, referralCode, referredByCode: referrer?.referralCode }, ip: request.ip, userAgent: request.get('user-agent'), requestId: request.id }], { session });
     });

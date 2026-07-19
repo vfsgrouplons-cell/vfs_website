@@ -11,6 +11,8 @@ const schema = new mongoose.Schema({
     fullName: { type: String, required: true, trim: true, maxlength: 100 },
     mobile: { type: String, required: true, trim: true },
     email: { type: String, trim: true, lowercase: true },
+    country: { type: String, trim: true, default: 'India' },
+    state: { type: String, required: true, trim: true, maxlength: 80 },
     city: { type: String, required: true, trim: true, maxlength: 80 },
     requestedAmount: { type: Number, min: 0 },
     notes: { type: String, trim: true, maxlength: 1500 },

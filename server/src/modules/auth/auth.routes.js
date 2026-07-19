@@ -12,7 +12,12 @@ import * as authService from './auth.service.js';
 export const authRouter = Router();
 const authLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false, message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many authentication attempts. Please try again later.' } } });
 
-authRouter.get('/csrf', (_request, response) => { const token = randomBytes(32).toString('hex'); response.cookie('vfs_csrf', token, { httpOnly: false, secure: process.env.NODE_ENV === 'production', sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', path: '/' }); sendData(response, { csrfToken: token }); });
+authRouter.get('/csrf', (request, response) => {
+  const existing = request.cookies?.vfs_csrf;
+  const token = typeof existing === 'string' && /^[a-f\d]{64}$/i.test(existing) ? existing : randomBytes(32).toString('hex');
+  response.cookie('vfs_csrf', token, { httpOnly: false, secure: process.env.NODE_ENV === 'production', sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', path: '/' });
+  sendData(response, { csrfToken: token });
+});
 authRouter.post('/customer/register', authLimit, validate(registerCustomerSchema), asyncHandler(async (request, response) => sendData(response, { user: await authService.registerCustomer(request.body, request, response) }, 201)));
 authRouter.post('/contractor/register', authLimit, validate(registerContractorSchema), asyncHandler(async (request, response) => sendData(response, { user: await authService.registerContractor(request.body, request, response) }, 201)));
 authRouter.post('/customer/login', authLimit, validate(loginSchema), asyncHandler(async (request, response) => sendData(response, { user: await authService.login(request.body, request, response, 'customer') })));

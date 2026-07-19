@@ -107,7 +107,7 @@ dashboardRouter.get('/admin/users/:id', requireRole(...ADMIN_ROLES), asyncHandle
 }));
 
 const adminUserUpdateSchema = z.object({
-  fullName: z.string().trim().min(2).max(100), city: z.string().trim().max(80), state: z.string().trim().max(80),
+  fullName: z.string().trim().min(2).max(100), country: z.literal('India').default('India'), city: z.string().trim().max(80), state: z.string().trim().max(80),
   businessName: z.string().trim().max(150).optional(), status: z.enum(['active', 'suspended']), reason: z.string().trim().min(3).max(500),
 }).strict();
 const adminUserRemoveSchema = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
@@ -119,11 +119,11 @@ dashboardRouter.patch('/admin/users/:id', requireRole(...ADMIN_ROLES), requireCs
       const user = await editableMember(request.params.id, request.user._id, session); const roleSlugs = user.roles.map((role) => role.slug);
       accountType = roleSlugs.includes('contractor') ? 'contractor' : 'customer';
       if (accountType !== 'contractor' && request.body.businessName !== undefined) throw new ApiError(422, 'FIELD_NOT_EDITABLE', 'Business name can only be changed for contractor accounts.');
-      const oldValues = { fullName: user.fullName, status: user.status }; const newValues = { fullName: request.body.fullName, status: request.body.status, city: request.body.city, state: request.body.state };
+      const oldValues = { fullName: user.fullName, status: user.status }; const newValues = { fullName: request.body.fullName, status: request.body.status, country: request.body.country, city: request.body.city, state: request.body.state };
       user.fullName = request.body.fullName; user.status = request.body.status; await user.save({ session });
       const Profile = accountType === 'contractor' ? Contractor : Customer; const profile = await Profile.findOne({ user: user._id }).session(session);
       if (!profile) throw new ApiError(409, 'MEMBER_PROFILE_MISSING', 'The member profile is missing. Account changes were not saved.');
-      oldValues.city = profile.city || ''; oldValues.state = profile.state || ''; profile.city = request.body.city; profile.state = request.body.state;
+      oldValues.country = profile.country || 'India'; oldValues.city = profile.city || ''; oldValues.state = profile.state || ''; profile.country = request.body.country; profile.city = request.body.city; profile.state = request.body.state;
       if (accountType === 'contractor') { oldValues.businessName = profile.businessName || ''; profile.businessName = request.body.businessName || ''; newValues.businessName = profile.businessName; }
       await profile.save({ session });
       if (request.body.status === 'suspended') await RefreshToken.updateMany({ user: user._id, revokedAt: null }, { $set: { revokedAt: new Date() } }, { session });

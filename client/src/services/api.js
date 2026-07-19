@@ -8,11 +8,34 @@ export function resolveApiBaseUrl({ isDevelopment = import.meta.env.DEV, configu
 export const api = axios.create({ baseURL: resolveApiBaseUrl(), withCredentials: true, headers: { Accept: 'application/json' } });
 
 let csrfToken;
+let csrfRequest;
+
+function clearCsrfToken() {
+  csrfToken = undefined;
+  csrfRequest = undefined;
+}
+
+export function resetApiSecurityState() {
+  clearCsrfToken();
+}
+
+async function getCsrfToken() {
+  if (csrfToken) return csrfToken;
+  if (!csrfRequest) {
+    csrfRequest = api.get('/auth/csrf')
+      .then((response) => {
+        csrfToken = response.data.data.csrfToken;
+        return csrfToken;
+      })
+      .finally(() => { csrfRequest = undefined; });
+  }
+  return csrfRequest;
+}
+
 api.interceptors.request.use(async (config) => {
   const method = config.method?.toLowerCase();
   if (['post', 'put', 'patch', 'delete'].includes(method) && !config.url?.includes('/auth/csrf')) {
-    if (!csrfToken) csrfToken = (await api.get('/auth/csrf')).data.data.csrfToken;
-    config.headers['x-csrf-token'] = csrfToken;
+    config.headers['x-csrf-token'] = await getCsrfToken();
   }
   return config;
 });
@@ -22,6 +45,17 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const request = error.config;
+    const isCsrfFailure = error.response?.status === 403 && error.response?.data?.error?.code === 'CSRF_FAILED';
+    if (isCsrfFailure && request && !request._csrfRetry) {
+      request._csrfRetry = true;
+      clearCsrfToken();
+      try {
+        await getCsrfToken();
+        return api(request);
+      } catch {
+        return Promise.reject(error);
+      }
+    }
     const isAuthenticationRequest = request?.url?.includes('/login')
       || request?.url?.includes('/register')
       || request?.url?.includes('/refresh');

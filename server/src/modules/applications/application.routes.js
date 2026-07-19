@@ -28,7 +28,7 @@ const mobile = z.string().trim().regex(/^\+?[1-9]\d{9,14}$/);
 const objectId = z.string().regex(/^[a-f\d]{24}$/i);
 const submissionSchema = z.object({
   service: objectId,
-  personal: z.object({ fullName: z.string().trim().min(2).max(100), mobile, email: z.string().trim().email().toLowerCase(), dateOfBirth: z.coerce.date().max(new Date()), city: z.string().trim().min(2).max(80), state: z.string().trim().min(2).max(80), pinCode: z.string().trim().regex(/^\d{6}$/) }),
+  personal: z.object({ fullName: z.string().trim().min(2).max(100), mobile, email: z.string().trim().email().toLowerCase(), dateOfBirth: z.coerce.date().max(new Date()), country: z.literal('India').default('India'), city: z.string().trim().min(2).max(80), state: z.string().trim().min(2).max(80), pinCode: z.string().trim().regex(/^\d{6}$/) }),
   financial: z.object({ employmentType: z.enum(['salaried','self_employed','business','other']), employerOrBusinessName: z.string().trim().max(150).optional(), monthlyIncome: z.coerce.number().min(0).max(1_000_000_000).optional(), annualTurnover: z.coerce.number().min(0).max(100_000_000_000).optional(), existingEmi: z.coerce.number().min(0).max(1_000_000_000).default(0), requestedAmount: z.coerce.number().positive().max(100_000_000_000), itrStatus: z.enum(['available','not_available','not_sure']).optional(), creditProfile: z.enum(['low','fair','good','not_sure']).optional() }),
   serviceSpecific: z.record(z.string().max(1000)).default({}), referralCode: z.string().trim().toUpperCase().max(40).optional().or(z.literal('')),
   consents: z.object({ privacy: z.literal(true), communication: z.boolean(), accuracy: z.literal(true), terms: z.literal(true) }),
@@ -36,7 +36,7 @@ const submissionSchema = z.object({
 });
 const draftSchema = z.object({
   service: objectId,
-  personal: z.object({ fullName: z.string().trim().max(100).optional(), mobile: z.string().trim().max(20).optional(), email: z.string().trim().max(150).optional(), dateOfBirth: z.string().trim().max(30).optional(), city: z.string().trim().max(80).optional(), state: z.string().trim().max(80).optional(), pinCode: z.string().trim().max(12).optional() }).default({}),
+  personal: z.object({ fullName: z.string().trim().max(100).optional(), mobile: z.string().trim().max(20).optional(), email: z.string().trim().max(150).optional(), dateOfBirth: z.string().trim().max(30).optional(), country: z.literal('India').optional(), city: z.string().trim().max(80).optional(), state: z.string().trim().max(80).optional(), pinCode: z.string().trim().max(12).optional() }).default({}),
   financial: z.object({ employmentType: z.string().trim().max(40).optional(), employerOrBusinessName: z.string().trim().max(150).optional(), monthlyIncome: z.coerce.number().min(0).max(1_000_000_000).optional(), annualTurnover: z.coerce.number().min(0).max(100_000_000_000).optional(), existingEmi: z.coerce.number().min(0).max(1_000_000_000).optional(), requestedAmount: z.coerce.number().min(0).max(100_000_000_000).optional(), itrStatus: z.string().trim().max(40).optional(), creditProfile: z.string().trim().max(40).optional() }).default({}),
   serviceSpecific: z.record(z.string().max(1000)).default({}), referralCode: z.string().trim().toUpperCase().max(40).optional(), consents: z.record(z.boolean()).optional(),
 });

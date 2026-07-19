@@ -64,4 +64,13 @@ describe('platform foundation', () => {
       expect(response.status).toBe(422);
     }
   });
+
+  it('reuses the browser CSRF cookie instead of invalidating open tabs', async () => {
+    const browser = request.agent(app);
+    const first = await browser.get('/api/v1/auth/csrf');
+    const second = await browser.get('/api/v1/auth/csrf');
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(second.body.data.csrfToken).toBe(first.body.data.csrfToken);
+  });
 });
