@@ -13,6 +13,7 @@ const schema = new mongoose.Schema({
   sortOrder: { type: Number, default: 0 },
   capturedAt: Date,
   consentConfirmed: { type: Boolean, default: false },
+  websiteVisible: { type: Boolean, default: false, index: true },
   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 }, { timestamps: true });
 schema.index({ status: 1, sortOrder: 1, createdAt: -1 });

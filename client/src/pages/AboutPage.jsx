@@ -1,4 +1,4 @@
-import { CheckCircle2, ShieldCheck, Sparkles, TrendingUp, Users } from 'lucide-react';
+import { CheckCircle2, ShieldCheck, TrendingUp, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Seo } from '../components/Seo.jsx';
 
@@ -12,12 +12,12 @@ const missionPoints = [
 ];
 
 const values = ['Integrity', 'Customer First', 'Transparency', 'Innovation', 'Speed', 'Professionalism', 'Trust', 'Compliance', 'Excellence'];
-const trends = ['Digital loan processing', 'Paperless documentation', 'Online customer support', 'AI-assisted loan eligibility guidance', 'Personalized financial planning', 'Investment diversification', 'End-to-end wealth management', 'Fast digital approvals', 'Secure customer data handling', 'Cashback and reward-based financial services'];
+const trends = ['Digital loan processing', 'Paperless documentation', 'Online customer support', 'Guided loan eligibility support', 'Personalized financial planning', 'Investment diversification', 'End-to-end wealth management', 'Fast digital approvals', 'Secure customer data handling', 'Cashback and reward-based financial services'];
 
 export function AboutPage() {
   return <>
     <Seo title="About VFS Groups" description="VFS Groups vision, mission, values, and commitment to transparent financial-service assistance." path="/about"/>
-    <section className="page-hero about-hero"><div className="shell"><span className="eyebrow"><Sparkles size={16}/> About VFS Group</span><h1>Your trusted partner for financial growth.</h1><p>VFS Group brings loans, insurance, investments, and wealth guidance together in one customer-focused financial service experience.</p><div className="button-row"><Link className="button button-gold" to="/services">Explore our services</Link><Link className="button button-outline" to="/contact">Talk to our team</Link></div></div></section>
+    <section className="page-hero about-hero"><div className="shell about-hero-grid"><div><span className="eyebrow"><ShieldCheck size={16}/> About VFS Group</span><h1>Your trusted partner for financial growth.</h1><p>VFS Group brings loans, insurance, investments, and wealth guidance together in one customer-focused financial service experience.</p><div className="button-row"><Link className="button button-gold" to="/services">Explore our services</Link><Link className="button button-outline" to="/contact">Talk to our team</Link></div></div><aside className="about-brand-panel"><span>One group for</span><strong>Loans</strong><strong>Insurance</strong><strong>Investments</strong><p>Clear guidance. Responsible support. Practical next steps.</p></aside></div></section>
 
     <section className="section"><div className="shell purpose-grid">
       <article className="purpose-card vision-card"><div className="purpose-icon"><TrendingUp/></div><span className="eyebrow">Our vision</span><h2>Financial progress built on trust.</h2><p>To become one of India&apos;s most trusted and customer-focused financial service organizations by providing innovative, transparent, and technology-driven financial solutions that help individuals, families, entrepreneurs, and businesses achieve their financial goals.</p></article>

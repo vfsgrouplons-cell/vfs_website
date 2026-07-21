@@ -1,6 +1,8 @@
 import { lazy, Suspense } from 'react';
 import { createBrowserRouter } from 'react-router-dom';
+import { BrandedLoader } from '../components/BrandedLoader.jsx';
 import { ProtectedRoute } from '../components/ProtectedRoute.jsx';
+import { RouteErrorPage } from '../components/RouteErrorPage.jsx';
 import { SiteLayout } from '../components/SiteLayout.jsx';
 import { SimpleContentPage } from '../pages/SimpleContentPage.jsx';
 
@@ -27,11 +29,11 @@ const AdminUserDetailPage = lazy(() => import('../pages/dashboards/AdminUserDeta
 const AdminReferralDetailPage = lazy(() => import('../pages/dashboards/AdminReferralDetailPage.jsx').then((module) => ({ default: module.AdminReferralDetailPage })));
 const AdminContentPage = lazy(() => import('../pages/dashboards/AdminContentPage.jsx').then((module) => ({ default: module.AdminContentPage })));
 const AdminApplicationsPage = lazy(() => import('../pages/dashboards/AdminApplicationsPage.jsx').then((module) => ({ default: module.AdminApplicationsPage })));
-const route = (element) => <Suspense fallback={<div className="shell route-loading" role="status">Loading page…</div>}>{element}</Suspense>;
+const route = (element) => <Suspense fallback={<BrandedLoader/>}>{element}</Suspense>;
 const adminRoles=['super-admin','admin','operations-manager','application-manager','finance-manager','support-agent','content-manager'];
 
 export const router = createBrowserRouter([{
-  path: '/', element: <SiteLayout />, children: [
+  path: '/', element: <SiteLayout />, errorElement: <RouteErrorPage/>, children: [
     { index: true, element: route(<HomePage />) }, { path: 'services', element: route(<ServicesPage />) }, { path: 'services/:slug', element: route(<ServiceDetailPage />) },
     { path: 'emi-calculator', element: route(<EmiCalculatorPage />) }, { path: 'contact', element: route(<ContactPage />) },
     { path: 'sign-in', element: route(<PortalChoicePage />) },
@@ -50,11 +52,11 @@ export const router = createBrowserRouter([{
     { path: '*', element: route(<NotFoundPage />) },
   ],
 },
-{ path:'/customer/dashboard',element:route(<ProtectedRoute allowedRoles={['customer']}><CustomerDashboardPage/></ProtectedRoute>) },
-{ path:'/contractor/dashboard',element:route(<ProtectedRoute allowedRoles={['contractor']}><ContractorDashboardPage/></ProtectedRoute>) },
-{ path:'/admin/dashboard',element:route(<ProtectedRoute allowedRoles={adminRoles}><AdminDashboardPage/></ProtectedRoute>) },
-{ path:'/admin/users/:id',element:route(<ProtectedRoute allowedRoles={adminRoles}><AdminUserDetailPage/></ProtectedRoute>) },
-{ path:'/admin/referrals/:code',element:route(<ProtectedRoute allowedRoles={adminRoles}><AdminReferralDetailPage/></ProtectedRoute>) },
-{ path:'/admin/applications',element:route(<ProtectedRoute allowedRoles={adminRoles}><AdminApplicationsPage/></ProtectedRoute>) },
-{ path:'/admin/content',element:route(<ProtectedRoute allowedRoles={adminRoles}><AdminContentPage/></ProtectedRoute>) },
+{ path:'/customer/dashboard',errorElement:<RouteErrorPage/>,element:route(<ProtectedRoute allowedRoles={['customer']}><CustomerDashboardPage/></ProtectedRoute>) },
+{ path:'/contractor/dashboard',errorElement:<RouteErrorPage/>,element:route(<ProtectedRoute allowedRoles={['contractor']}><ContractorDashboardPage/></ProtectedRoute>) },
+{ path:'/admin/dashboard',errorElement:<RouteErrorPage/>,element:route(<ProtectedRoute allowedRoles={adminRoles}><AdminDashboardPage/></ProtectedRoute>) },
+{ path:'/admin/users/:id',errorElement:<RouteErrorPage/>,element:route(<ProtectedRoute allowedRoles={adminRoles}><AdminUserDetailPage/></ProtectedRoute>) },
+{ path:'/admin/referrals/:code',errorElement:<RouteErrorPage/>,element:route(<ProtectedRoute allowedRoles={adminRoles}><AdminReferralDetailPage/></ProtectedRoute>) },
+{ path:'/admin/applications',errorElement:<RouteErrorPage/>,element:route(<ProtectedRoute allowedRoles={adminRoles}><AdminApplicationsPage/></ProtectedRoute>) },
+{ path:'/admin/content',errorElement:<RouteErrorPage/>,element:route(<ProtectedRoute allowedRoles={adminRoles}><AdminContentPage/></ProtectedRoute>) },
 ]);

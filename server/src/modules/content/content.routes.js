@@ -33,7 +33,7 @@ contentRouter.get('/faqs', asyncHandler(async (request, response) => {
   const filter = { status: 'published' }; if (request.query.category) filter.category = request.query.category;
   sendData(response, await Faq.find(filter).sort({ category: 1, sortOrder: 1, createdAt: 1 }).lean());
 }));
-contentRouter.get('/gallery', asyncHandler(async (_request, response) => sendData(response, await GalleryItem.find({ consentConfirmed: true }).sort({ sortOrder: 1, createdAt: -1 }).lean())));
+contentRouter.get('/gallery', asyncHandler(async (_request, response) => sendData(response, await GalleryItem.find({ status: 'published', consentConfirmed: true, websiteVisible: true }).sort({ sortOrder: 1, createdAt: -1 }).lean())));
 contentRouter.get('/testimonials', asyncHandler(async (_request, response) => sendData(response, await Testimonial.find({ status: 'published', consentConfirmed: true, verifiedAt: { $exists: true } }).sort({ sortOrder: 1, createdAt: -1 }).lean())));
 contentRouter.get('/pages/:slug', asyncHandler(async (request, response) => {
   const page = await ContentPage.findOne({ slug: request.params.slug, status: 'published' }).lean();
@@ -62,7 +62,7 @@ const faqSchema = z.object({ category: z.string().trim().min(2).max(80), questio
 contentRouter.post('/admin/faqs', requireCsrf, validate(faqSchema), asyncHandler(async (request, response) => sendData(response, await Faq.create({ ...request.body, updatedBy: request.user._id }), 201)));
 contentRouter.patch('/admin/faqs/:id', requireCsrf, validate(faqSchema.partial()), asyncHandler(async (request, response) => { const item = await Faq.findByIdAndUpdate(request.params.id, { $set: { ...request.body, updatedBy: request.user._id } }, { new: true, runValidators: true }); if (!item) throw new ApiError(404, 'FAQ_NOT_FOUND', 'FAQ not found.'); sendData(response, item); }));
 
-const galleryUpdateSchema = z.object({ title: z.string().trim().min(2).max(150), caption: z.string().trim().max(1000), altText: z.string().trim().min(3).max(300), category: z.string().trim().min(2).max(80), capturedAt: z.coerce.date().nullable(), status, consentConfirmed: z.boolean() }).partial();
+const galleryUpdateSchema = z.object({ title: z.string().trim().min(2).max(150), caption: z.string().trim().max(1000), altText: z.string().trim().min(3).max(300), category: z.string().trim().min(2).max(80), capturedAt: z.coerce.date().nullable(), status, consentConfirmed: z.boolean(), websiteVisible: z.boolean() }).partial();
 const objectId = z.string().regex(/^[a-f\d]{24}$/i);
 const galleryReorderSchema = z.object({ ids: z.array(objectId).min(1).max(500).refine((ids) => new Set(ids).size === ids.length, 'Gallery item IDs must be unique.') });
 function galleryInternalTitle(file, isVideo) {
@@ -87,6 +87,7 @@ contentRouter.post('/admin/gallery', requireCsrf, upload.single('media'), asyncH
       category: 'Gallery',
       status: 'published',
       consentConfirmed: true,
+      websiteVisible: true,
       media,
       sortOrder: (lastItem?.sortOrder ?? -1) + 1,
       updatedBy: request.user._id,

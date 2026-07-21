@@ -140,7 +140,7 @@ describe('portal authentication flows', () => {
     expect(response.body.data[0].question).toBe('Published question?');
   });
 
-  it('lets administrators reorder gallery media and blocks publication without consent', async () => {
+  it('lets administrators reorder gallery media and publishes only approved visible items', async () => {
     const adminRole = await Role.findOne({ slug: 'super-admin' });
     const config = { INITIAL_ADMIN_NAME: 'Gallery Admin', INITIAL_ADMIN_EMAIL: 'gallery@example.com', INITIAL_ADMIN_MOBILE: '919100000077', INITIAL_ADMIN_PASSWORD: 'GalleryAdminPass123' };
     await syncInitialAdmin(config, adminRole);
@@ -150,8 +150,8 @@ describe('portal authentication flows', () => {
     const token = csrf.body.data.csrfToken;
 
     const [first, second, draft] = await GalleryItem.create([
-      { title: 'First image', altText: 'First gallery image', category: 'Office', status: 'published', consentConfirmed: true, sortOrder: 0, media: { resourceType: 'image', url: 'https://example.com/first.jpg' } },
-      { title: 'Second video', altText: 'Second gallery video', category: 'Events', status: 'published', consentConfirmed: true, sortOrder: 1, media: { resourceType: 'video', url: 'https://example.com/second.mp4' } },
+      { title: 'First image', altText: 'First gallery image', category: 'Office', status: 'published', consentConfirmed: true, websiteVisible: true, sortOrder: 0, media: { resourceType: 'image', url: 'https://example.com/first.jpg' } },
+      { title: 'Second video', altText: 'Second gallery video', category: 'Events', status: 'published', consentConfirmed: true, websiteVisible: true, sortOrder: 1, media: { resourceType: 'video', url: 'https://example.com/second.mp4' } },
       { title: 'Private draft', altText: 'Private draft media', category: 'Team', status: 'draft', consentConfirmed: false, sortOrder: 2, media: { resourceType: 'image', url: 'https://example.com/draft.jpg' } },
     ]);
 
