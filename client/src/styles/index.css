@@ -326,6 +326,19 @@ p { color:var(--muted); line-height:1.75; }
 .quick-service-form>p { margin:0; color:#6d8188; font-size:.62rem; line-height:1.5; }
 .quick-service-form .form-error { color:#a82b22; }
 .quick-service-form .form-success { color:#146b4c; }
+.service-choice-direct { border-bottom:0!important; padding-bottom:0!important; }
+.service-choice-direct>svg { color:var(--gold)!important; }
+.service-choice-divider { display:flex; align-items:center; gap:.65rem; color:#75898f; font-size:.62rem; font-weight:800; letter-spacing:.1em; text-align:center; text-transform:uppercase; }
+.service-choice-divider::before,.service-choice-divider::after { content:""; flex:1; height:1px; background:var(--line); }
+.callback-success-panel .button { justify-content:center; }
+.callback-success-panel>div>svg { color:#16875b; }
+.callback-success-panel .callback-waiting-note { padding:.8rem; border:1px solid #a8dcca; border-radius:9px; color:#146b4c; background:#edf9f4; font-size:.72rem; }
+.application-next-steps { display:grid; grid-template-columns:auto 22px auto 22px auto 22px auto; align-items:center; gap:.55rem; margin:1.25rem 0; padding:1rem; border:1px solid #c9ddd6; border-radius:12px; color:#174852; background:#f4fbf8; }
+.application-next-steps span { font-size:.72rem; font-weight:800; text-align:center; }
+.application-next-steps svg { width:17px; color:#a87608; }
+.application-id-reminder { color:#405e67; font-weight:700; }
+.application-success-actions { flex-wrap:wrap; }
+.application-success-actions .button svg { width:17px; }
 .service-simple-section { background:#f7f9f9; }
 .service-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0; border-block:1px solid #cfdbde; }
 .service-facts>section { padding:2rem clamp(1.25rem,3vw,2.5rem); border-right:1px solid #cfdbde; }
@@ -353,6 +366,11 @@ p { color:var(--muted); line-height:1.75; }
   .service-detail-hero .service-hero-intro { margin-top:1.5rem; }
   .service-reassurance { display:grid; }
   .quick-service-form { padding:1.1rem; }
+  .application-next-steps { grid-template-columns:1fr; }
+  .application-next-steps svg { display:none; }
+  .application-next-steps span { text-align:left; }
+  .application-next-steps span::before { content:"✓"; display:inline-grid; place-items:center; width:22px; height:22px; margin-right:.55rem; border-radius:50%; color:white; background:#16875b; }
+  .application-success-actions .button { width:100%; }
 }
 
 /* Verified company details and restrained footer credit */

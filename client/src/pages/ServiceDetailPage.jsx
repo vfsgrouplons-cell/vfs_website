@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowRight, CheckCircle2, FileText, PhoneCall } from 'lucide-react';
+import { ArrowRight, CheckCircle2, FilePenLine, FileText, PhoneCall } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Seo } from '../components/Seo.jsx';
@@ -49,9 +49,11 @@ export function ServiceDetailPage() {
 function QuickServiceEnquiry({ service }) {
   const [values, setValues] = useState({ name: '', mobile: '', website: '' });
   const [errors, setErrors] = useState({});
+  const [waiting, setWaiting] = useState(false);
+  const serviceKind = service.category === 'Loans' ? 'loan' : 'service';
   const enquiry = useMutation({
     mutationFn: async (input) => (await api.post('/contact/callbacks', input)).data.data,
-    onSuccess: () => { setValues({ name: '', mobile: '', website: '' }); setErrors({}); trackEvent('service_callback_requested', { service: service.slug }); },
+    onSuccess: () => { setValues({ name: '', mobile: '', website: '' }); setErrors({}); setWaiting(false); trackEvent('service_callback_requested', { service: service.slug }); },
   });
   function update(event) {
     const value = event.target.name === 'mobile' ? sanitizeMobile(event.target.value) : event.target.value;
@@ -68,15 +70,24 @@ function QuickServiceEnquiry({ service }) {
     if (Object.keys(nextErrors).length) return;
     enquiry.mutate({ name: values.name.trim(), mobile: values.mobile, service: service._id, consent: true, website: values.website });
   }
+  if (enquiry.isSuccess) return <section className="quick-service-form callback-success-panel" aria-live="polite">
+    <div><CheckCircle2/><span><strong>Callback request received</strong><small>Our team has your number and selected service.</small></span></div>
+    <p className="form-success">Choose what you would like to do next.</p>
+    <Link className="button button-gold" to={`/apply?service=${service.slug}`}><FilePenLine/> Complete application now</Link>
+    <button className="button button-outline" type="button" onClick={() => setWaiting(true)}><PhoneCall/> Wait for our call</button>
+    {waiting && <p className="callback-waiting-note">You are all set. No more action is needed—VFS Groups will call the mobile number you provided.</p>}
+  </section>;
   return <form className="quick-service-form" onSubmit={submit} noValidate>
+    <div className="service-choice-direct"><FilePenLine/><span><strong>Ready to apply directly?</strong><small>Complete the secure application online.</small></span></div>
+    <Link className="button button-dark" to={`/apply?service=${service.slug}`}>Apply for this {serviceKind} <ArrowRight/></Link>
+    <span className="service-choice-divider">or request a call</span>
     <div><PhoneCall/><span><strong>Interested in {service.name}?</strong><small>Share two details. Our team will call you.</small></span></div>
     <label>Full name<input name="name" value={values.name} onChange={update} autoComplete="name" aria-invalid={Boolean(errors.name)}/>{errors.name && <small className="field-error">{errors.name}</small>}</label>
     <label>Mobile number<input name="mobile" type="tel" inputMode="tel" value={values.mobile} onChange={update} autoComplete="tel" aria-invalid={Boolean(errors.mobile)}/>{errors.mobile && <small className="field-error">{errors.mobile}</small>}</label>
     <input className="honeypot" name="website" value={values.website} onChange={update} tabIndex="-1" autoComplete="off"/>
-    <button className="button button-gold" disabled={enquiry.isPending}>{enquiry.isPending ? 'Sending…' : 'Ask VFS Groups to call me'} <ArrowRight/></button>
+    <button className="button button-gold" disabled={enquiry.isPending}>{enquiry.isPending ? 'Sending…' : `Request a call about this ${serviceKind}`} <ArrowRight/></button>
     <p>By requesting a call, you consent to VFS Groups using these details to respond about this service.</p>
     {enquiry.isError && <p className="form-error" role="alert">{apiMessage(enquiry.error)}</p>}
-    {enquiry.isSuccess && <p className="form-success" role="status">Request received. Our team will call you on the number provided.</p>}
   </form>;
 }
 
