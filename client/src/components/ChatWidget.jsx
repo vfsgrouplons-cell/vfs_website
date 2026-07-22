@@ -6,7 +6,7 @@ import { api, apiMessage } from '../services/api.js';
 
 const welcome = { role: 'assistant', content: 'Hello. What financial goal can we help with? Ask about services, documents, applications, or tracking in simple words.' };
 
-export function ChatWidget({ phone = '919160353295', whatsapp = phone }) {
+export function ChatWidget({ phone = '919008503115', whatsapp = '919008156084' }) {
   const [open, setOpen] = useState(false); const [messages, setMessages] = useState([welcome]); const [input, setInput] = useState(''); const [sending, setSending] = useState(false); const [error, setError] = useState('');
   async function submit(event) {
     event.preventDefault(); const message = input.trim(); if (!message || sending) return;

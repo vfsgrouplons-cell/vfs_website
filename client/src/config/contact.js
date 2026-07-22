@@ -1,6 +1,8 @@
+export const officialPhoneNumbers = ['919008503115', '919008156084', '919880077987'];
+
 export const officialWhatsApp = {
-  display: '+91 91603 53295',
-  number: '919160353295',
+  display: '+91 90081 56084',
+  number: '919008156084',
 };
 
 export function createWhatsAppUrl(message, number = officialWhatsApp.number) {

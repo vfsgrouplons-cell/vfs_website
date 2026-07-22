@@ -3,13 +3,17 @@ import mongoose from 'mongoose';
 const schema = new mongoose.Schema({
   key: { type: String, unique: true, default: 'public' },
   contact: {
-    phone: { type: String, trim: true, default: '919160353295' },
-    whatsapp: { type: String, trim: true, default: '919160353295' },
+    phone: { type: String, trim: true, default: '919008503115' },
+    phones: { type: [String], default: ['919008503115', '919008156084', '919880077987'] },
+    whatsapp: { type: String, trim: true, default: '919008156084' },
     email: { type: String, trim: true, lowercase: true, default: '' },
     addressLines: { type: [String], default: ['No. 881/A, Yashodhara Complex', 'Dr. M. C. Modi Road, Shankarmutt Main Road', 'Basaveshwara Nagar'] },
     city: { type: String, trim: true, default: 'Bengaluru' },
     state: { type: String, trim: true, default: 'Karnataka' },
     pinCode: { type: String, trim: true, default: '560079' },
+    locationNote: { type: String, trim: true, default: 'VFS GROUP, 3rd Floor' },
+    mapLatitude: { type: String, trim: true, default: '12.998319625854492' },
+    mapLongitude: { type: String, trim: true, default: '77.54251098632812' },
     officeHours: { type: String, trim: true, default: '' },
   },
   legal: {

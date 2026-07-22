@@ -51,7 +51,7 @@ contentRouter.get('/admin/overview', asyncHandler(async (_request, response) => 
 }));
 
 const settingsSchema = z.object({
-  contact: z.object({ phone: z.string().trim().max(30), whatsapp: z.string().trim().max(30), email: z.string().trim().email().or(z.literal('')), addressLines: z.array(z.string().trim().max(150)).max(4), city: z.string().trim().max(80), state: z.string().trim().max(80), pinCode: z.string().trim().max(12), officeHours: z.string().trim().max(150) }),
+  contact: z.object({ phone: z.string().trim().max(30), phones: z.array(z.string().trim().max(30)).min(1).max(5).optional(), whatsapp: z.string().trim().max(30), email: z.string().trim().email().or(z.literal('')), addressLines: z.array(z.string().trim().max(150)).max(4), city: z.string().trim().max(80), state: z.string().trim().max(80), pinCode: z.string().trim().max(12), locationNote: z.string().trim().max(150).optional(), mapLatitude: z.string().trim().regex(/^-?\d{1,2}(\.\d+)?$/).optional(), mapLongitude: z.string().trim().regex(/^-?\d{1,3}(\.\d+)?$/).optional(), officeHours: z.string().trim().max(150) }),
   legal: z.object({ legalName: z.string().trim().min(2).max(150), registrationNumber: z.string().trim().max(100), gstNumber: z.string().trim().max(100), regulatoryDisclosure: z.string().trim().max(2000), providerRelationship: z.string().trim().min(20).max(2000) }),
   cashback: z.object({ enabled: z.boolean(), terms: z.string().trim().max(2000) }),
   social: z.object({ facebook: z.string().trim().url().or(z.literal('')), instagram: z.string().trim().url().or(z.literal('')), linkedin: z.string().trim().url().or(z.literal('')), youtube: z.string().trim().url().or(z.literal('')) }),

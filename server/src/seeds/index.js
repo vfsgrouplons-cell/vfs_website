@@ -14,10 +14,16 @@ import { contentPages, generalFaqs, permissions, roleDefinitions, services } fro
 
 const roleNames = { 'super-admin': 'Super Admin', admin: 'Admin', 'operations-manager': 'Operations Manager', 'application-manager': 'Application Manager', 'finance-manager': 'Finance Manager', 'support-agent': 'Support Agent', 'content-manager': 'Content Manager', contractor: 'Contractor', customer: 'Customer' };
 const verifiedBusinessSettings = {
+  'contact.phone': '919008503115',
+  'contact.phones': ['919008503115', '919008156084', '919880077987'],
+  'contact.whatsapp': '919008156084',
   'contact.addressLines': ['No. 881/A, Yashodhara Complex', 'Dr. M. C. Modi Road, Shankarmutt Main Road', 'Basaveshwara Nagar'],
   'contact.city': 'Bengaluru',
   'contact.state': 'Karnataka',
   'contact.pinCode': '560079',
+  'contact.locationNote': 'VFS GROUP, 3rd Floor',
+  'contact.mapLatitude': '12.998319625854492',
+  'contact.mapLongitude': '77.54251098632812',
   'legal.legalName': 'VFS GROUP',
   'legal.registrationNumber': '29ABBFV2204K1Z5',
   'legal.gstNumber': '29ABBFV2204K1Z5',
