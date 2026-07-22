@@ -8,12 +8,15 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { env } from '../../config/env.js';
+import { requireAuth, requireRole } from '../../middleware/auth.js';
+import { requireCsrf } from '../../middleware/csrf.js';
 import { validate } from '../../middleware/validate.js';
 import { Application, APPLICATION_STATUSES } from '../../models/Application.js';
 import { ApplicationDocument } from '../../models/ApplicationDocument.js';
 import { ApplicationStatusHistory } from '../../models/ApplicationStatusHistory.js';
 import { AuditLog } from '../../models/AuditLog.js';
 import { Contractor } from '../../models/Contractor.js';
+import { Customer } from '../../models/Customer.js';
 import { Service } from '../../models/Service.js';
 import { VerificationChallenge } from '../../models/VerificationChallenge.js';
 import { mayDisplayMockOtp, smsProvider } from '../../providers/sms.js';
@@ -44,10 +47,39 @@ const draftLimit = rateLimit({ windowMs: 60 * 60 * 1000, limit: 30, standardHead
 const referralValidationSchema = z.object({ referralCode: z.string().trim().toUpperCase().min(1).max(40) });
 const referralValidationLimit = rateLimit({ windowMs: 60 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false });
 
+applicationRouter.get('/customer/draft', requireAuth, requireRole('customer'), asyncHandler(async (request, response) => {
+  const customer = await customerFor(request.user._id);
+  const draft = await Application.findOne({ customer: customer._id, status: 'draft', draftExpiresAt: { $gt: new Date() } }).sort({ updatedAt: -1 });
+  sendData(response, {
+    account: { fullName: request.user.fullName, mobile: request.user.mobile, email: request.user.email || '', country: customer.country || 'India', state: customer.state || '', city: customer.city || '' },
+    draft: draft ? draftSnapshot(draft) : null,
+  });
+}));
+
+applicationRouter.put('/customer/draft', requireAuth, requireRole('customer'), requireCsrf, draftLimit, validate(draftSchema), asyncHandler(async (request, response) => {
+  const customer = await customerFor(request.user._id);
+  await ensurePublishedService(request.body.service);
+  const values = { ...cleanObject(request.body), customer: customer._id, updatedBy: request.user._id, draftExpiresAt: draftExpiry() };
+  let draft = await Application.findOne({ customer: customer._id, status: 'draft', draftExpiresAt: { $gt: new Date() } }).sort({ updatedAt: -1 });
+  if (draft) {
+    Object.assign(draft, values);
+    await draft.save();
+  } else {
+    draft = await Application.create({ ...values, status: 'draft', createdBy: request.user._id });
+  }
+  sendData(response, { ...draftSnapshot(draft), message: 'Draft saved to your customer account for 30 days.' }, 201);
+}));
+
+applicationRouter.delete('/customer/draft', requireAuth, requireRole('customer'), requireCsrf, asyncHandler(async (request, response) => {
+  const customer = await customerFor(request.user._id);
+  const result = await Application.deleteMany({ customer: customer._id, status: 'draft' });
+  sendData(response, { deleted: result.deletedCount > 0 });
+}));
+
 applicationRouter.post('/public/drafts', draftLimit, validate(draftSchema), asyncHandler(async (request, response) => {
   await ensurePublishedService(request.body.service);
   const resumeToken = randomBytes(32).toString('hex');
-  const application = await Application.create({ ...cleanObject(request.body), status: 'draft', resumeTokenHash: hash(resumeToken), draftExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) });
+  const application = await Application.create({ ...cleanObject(request.body), status: 'draft', resumeTokenHash: hash(resumeToken), draftExpiresAt: draftExpiry() });
   sendData(response, { draftId: application.id, resumeToken, expiresAt: application.draftExpiresAt, message: 'Your draft was saved securely for 30 days on this device.' }, 201);
 }));
 
@@ -59,7 +91,7 @@ applicationRouter.get('/public/drafts/:id', draftLimit, asyncHandler(async (requ
 applicationRouter.patch('/public/drafts/:id', draftLimit, validate(draftSchema), asyncHandler(async (request, response) => {
   const draft = await authenticatedDraft(request.params.id, request.get('x-resume-token'));
   await ensurePublishedService(request.body.service);
-  Object.assign(draft, cleanObject(request.body), { draftExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) });
+  Object.assign(draft, cleanObject(request.body), { draftExpiresAt: draftExpiry() });
   await draft.save();
   sendData(response, { draftId: draft.id, expiresAt: draft.draftExpiresAt, message: 'Draft updated.' });
 }));
@@ -70,27 +102,38 @@ applicationRouter.post('/public/referrals/validate', referralValidationLimit, va
   sendData(response, { valid: true, referralCode: contractor.referralCode });
 }));
 
-applicationRouter.post('/public/submit', rateLimit({ windowMs: 60 * 60 * 1000, limit: 8, standardHeaders: true, legacyHeaders: false }), validate(submissionSchema), asyncHandler(async (request, response) => {
+const submissionLimit = rateLimit({ windowMs: 60 * 60 * 1000, limit: 8, standardHeaders: true, legacyHeaders: false });
+applicationRouter.post('/public/submit', submissionLimit, validate(submissionSchema), asyncHandler(async (request, response) => submitApplication(request, response)));
+applicationRouter.post('/customer/submit', requireAuth, requireRole('customer'), requireCsrf, submissionLimit, validate(submissionSchema), asyncHandler(async (request, response) => submitApplication(request, response, true)));
+
+async function submitApplication(request, response, isCustomerSubmission = false) {
   const input = { ...request.body }; delete input.website; const draftId = input.draftId; delete input.draftId;
   const service = await ensurePublishedService(input.service);
   const contractor = input.referralCode ? await Contractor.findOne({ referralCode: input.referralCode, onboardingStatus: 'approved' }).select('_id referralCode') : null;
   if (input.referralCode && !contractor) throw new ApiError(422, 'REFERRAL_INVALID', 'The referral code is not valid or active.');
-  const existingDraft = draftId ? await authenticatedDraft(draftId, request.get('x-resume-token')) : null;
+  const customer = isCustomerSubmission ? await customerFor(request.user._id) : null;
+  const existingDraft = draftId
+    ? isCustomerSubmission
+      ? await Application.findOne({ _id: draftId, customer: customer._id, status: 'draft', draftExpiresAt: { $gt: new Date() } })
+      : await authenticatedDraft(draftId, request.get('x-resume-token'))
+    : null;
+  if (draftId && isCustomerSubmission && !existingDraft) throw new ApiError(404, 'CUSTOMER_DRAFT_NOT_FOUND', 'This account draft is unavailable or expired. Save it again before submitting.');
 
   const session = await mongoose.startSession(); let application;
   try {
     await session.withTransaction(async () => {
       const now = new Date(); const identifiers = { applicationId: await nextPublicId('application', session), leadId: await nextPublicId('lead', session) };
-      const values = { ...input, ...identifiers, service: service._id, contractor: contractor?._id, referralCode: contractor?.referralCode, referralLockedAt: contractor ? now : undefined, consents: { ...input.consents, capturedAt: now, ip: request.ip, userAgent: request.get('user-agent') }, status: 'submitted', submittedAt: now };
+      const values = { ...input, ...identifiers, service: service._id, contractor: contractor?._id, referralCode: contractor?.referralCode, referralLockedAt: contractor ? now : undefined, consents: { ...input.consents, capturedAt: now, ip: request.ip, userAgent: request.get('user-agent') }, status: 'submitted', submittedAt: now, ...(customer ? { customer: customer._id, createdBy: request.user._id, updatedBy: request.user._id } : {}) };
       if (existingDraft) application = await Application.findOneAndUpdate({ _id: existingDraft._id, status: 'draft' }, { $set: values, $unset: { resumeTokenHash: 1, draftExpiresAt: 1, ...(!contractor ? { contractor: 1, referralCode: 1, referralLockedAt: 1 } : {}) } }, { new: true, session, runValidators: true });
       else [application] = await Application.create([values], { session });
       if (!application) throw new ApiError(409, 'DRAFT_ALREADY_SUBMITTED', 'This draft has already been submitted.');
-      await ApplicationStatusHistory.create([{ application: application._id, newStatus: 'submitted', changedByRole: 'public_applicant', publicNote: 'Your application was submitted to VFS Groups for an initial completeness review.', reason: 'Public application submission' }], { session });
-      await AuditLog.create([{ action: 'application.public.submitted', resourceType: 'Application', resourceId: application._id, newValues: { status: 'submitted', referralCode: contractor?.referralCode }, ip: request.ip, userAgent: request.get('user-agent'), requestId: request.id }], { session });
+      const actorRole = customer ? 'customer' : 'public_applicant';
+      await ApplicationStatusHistory.create([{ application: application._id, changedBy: request.user?._id, newStatus: 'submitted', changedByRole: actorRole, publicNote: 'Your application was submitted to VFS Groups for an initial completeness review.', reason: customer ? 'Customer account application submission' : 'Public application submission' }], { session });
+      await AuditLog.create([{ actor: request.user?._id, actorRoles: customer ? ['customer'] : [], action: customer ? 'application.customer.submitted' : 'application.public.submitted', resourceType: 'Application', resourceId: application._id, newValues: { status: 'submitted', referralCode: contractor?.referralCode }, ip: request.ip, userAgent: request.get('user-agent'), requestId: request.id }], { session });
     });
   } finally { await session.endSession(); }
   sendData(response, { applicationId: application.applicationId, leadId: application.leadId, status: application.status, submittedAt: application.submittedAt, acknowledgement: 'Your application has been received for an initial completeness review. This is not an approval or offer.' }, 201);
-}));
+}
 
 const trackingRequestSchema = z.object({ applicationId: z.string().trim().regex(/^VFS-APP-\d{4}-\d{6}$/i), mobile });
 applicationRouter.post('/public/track/request', rateLimit({ windowMs: 10 * 60 * 1000, limit: 6, standardHeaders: true, legacyHeaders: false }), validate(trackingRequestSchema), asyncHandler(async (request, response) => {
@@ -139,6 +182,9 @@ applicationRouter.post('/public/track/:applicationId/documents', documentUpload.
 }));
 
 async function ensurePublishedService(id) { const service = await Service.findOne({ _id: id, status: 'published' }).select('_id'); if (!service) throw new ApiError(422, 'SERVICE_UNAVAILABLE', 'Choose an available service.'); return service; }
+async function customerFor(userId) { const customer = await Customer.findOne({ user: userId }); if (!customer) throw new ApiError(409, 'CUSTOMER_PROFILE_MISSING', 'Your customer profile is unavailable. Please contact support.'); return customer; }
+function draftExpiry() { return new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); }
+function draftSnapshot(draft) { return { draftId: draft.id, service: draft.service, personal: draft.personal, financial: draft.financial, serviceSpecific: draft.serviceSpecific, referralCode: draft.referralCode, consents: draft.consents, expiresAt: draft.draftExpiresAt }; }
 function hash(value) { return createHash('sha256').update(String(value)).digest('hex'); }
 function safeEqual(left, right) { const a = Buffer.from(left); const b = Buffer.from(right); return a.length === b.length && timingSafeEqual(a, b); }
 function cleanObject(value) { if (Array.isArray(value)) return value.map(cleanObject); if (!value || typeof value !== 'object') return value; return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== '' && item !== null && item !== undefined && !(typeof item === 'number' && Number.isNaN(item))).map(([key, item]) => [key, cleanObject(item)])); }

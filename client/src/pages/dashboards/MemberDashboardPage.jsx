@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Clipboard, FileText, LayoutDashboard, Send, Share2, ShieldCheck, UserPlus, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { Link } from 'react-router-dom';
 import { LocationFields } from '../../components/LocationFields.jsx';
 import { DashboardShell } from '../../components/dashboard/DashboardShell.jsx';
 import { DashboardTabs, Pagination } from '../../components/dashboard/DashboardTabs.jsx';
@@ -15,6 +16,7 @@ const pageSize = 10;
 export function MemberDashboardPage({ portal }) {
   const queryClient = useQueryClient(); const [copied, setCopied] = useState(false); const [active, setActive] = useState('overview'); const [pages, setPages] = useState({ registrations: 1, submissions: 1, security: 1 });
   const dashboard = useQuery({ queryKey: ['dashboard', portal], queryFn: async () => (await api.get(`/dashboard/${portal}`)).data.data });
+  const customerApplication = useQuery({ queryKey: ['customer-application-draft', dashboard.data?.user?._id], enabled: portal === 'customer' && Boolean(dashboard.data?.user?._id), queryFn: async () => (await api.get('/applications/customer/draft')).data.data, retry: false });
   const services = useQuery({ queryKey: ['services'], queryFn: async () => (await api.get('/services')).data.data });
   const registrations = useMemberPage(portal, 'referred-users', pages.registrations, active === 'registrations');
   const submissions = useMemberPage(portal, 'service-referrals', pages.submissions, active === 'submissions');
@@ -37,6 +39,7 @@ export function MemberDashboardPage({ portal }) {
   return <DashboardShell role={portal} title={data.user.fullName}>
     <section className="dashboard-welcome"><div><span className="eyebrow">{portal} dashboard</span><h1>Welcome, {data.user.fullName}</h1><p>Your authorized activity and records appear below.</p></div><div className="referral-code-card"><span>Your permanent referral code</span><strong>{data.user.referralCode}</strong><div><button type="button" onClick={() => copy(data.user.referralCode)}><Clipboard size={16}/>{copied ? 'Copied' : 'Copy'}</button><button type="button" onClick={share}><Share2 size={16}/>Share</button></div></div></section>
     <section className="metric-grid"><Metric label="Successful logins" value={data.metrics.successfulLogins}/><Metric label="Last login" value={formatDate(data.user.lastLoginAt)} compact/><Metric label="Users registered through you" value={data.metrics.registeredThroughCode}/><Metric label="Service referrals submitted" value={data.metrics.loanReferralsSubmitted}/></section>
+    {portal === 'customer' && <section className="dashboard-card customer-application-entry"><div><span className="eyebrow">My financial application</span><h2>{customerApplication.data?.draft ? 'Continue your saved application' : 'Start a new application'}</h2><p>{customerApplication.data?.draft ? 'Your account draft is ready. Continue from the saved information and submit when complete.' : 'Choose a service, fill the guided steps, and save progress securely to this account.'}</p></div><Link className="button button-gold" to="/apply">{customerApplication.data?.draft ? 'Continue application' : 'Start application'}</Link></section>}
     <DashboardTabs tabs={tabs} active={active} onChange={setActive} label={`${portal} dashboard sections`}/>
 
     {active === 'overview' && <section className="dashboard-columns tab-panel" role="tabpanel"><article className="dashboard-card"><span className="eyebrow">Latest registrations</span><h2>Recently registered through you</h2><ResponsiveTable columns={['Name', 'Role', 'Registered']} rows={data.referredUsers.map((user) => [user.fullName, user.roles?.[0]?.name || 'User', formatDate(user.createdAt)])} empty="No users have registered through your code yet."/><button type="button" className="inline-link tab-more" onClick={() => setActive('registrations')}>View all registrations →</button></article><article className="dashboard-card"><span className="eyebrow">Latest submissions</span><h2>Recent service referrals</h2><ResponsiveTable columns={['Referral ID', 'Applicant', 'Status']} rows={data.recentLoanReferrals.map((item) => [item.referralId, item.applicant.fullName, humanize(item.status)])} empty="You have not submitted a service referral yet."/><button type="button" className="inline-link tab-more" onClick={() => setActive('submissions')}>View all submissions →</button></article></section>}

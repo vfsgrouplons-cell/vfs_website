@@ -122,6 +122,48 @@ describe('portal authentication flows', () => {
     expect(tracked.body.data.history).toHaveLength(1);
   }, 20_000);
 
+  it('saves a customer-owned draft, restores account details, and links the submitted application', async () => {
+    const service = await Service.create({ name: 'Customer Home Loan', slug: 'customer-home-loan', category: 'Loans', shortDescription: 'Test service', overview: 'Test overview', status: 'published' });
+    const browser = request.agent(app);
+    const registered = await browser.post('/api/v1/auth/customer/register').send({ fullName: 'Account Applicant', mobile: '919100000097', email: 'account-applicant@gmail.com', password: 'AccountApplicant123', country: 'India', city: 'Bengaluru', state: 'Karnataka', referredByCode: '', consent: true });
+    expect(registered.status).toBe(201);
+    const csrfToken = (await browser.get('/api/v1/auth/csrf')).body.data.csrfToken;
+
+    const initial = await browser.get('/api/v1/applications/customer/draft');
+    expect(initial.status).toBe(200);
+    expect(initial.body.data.account).toMatchObject({ fullName: 'Account Applicant', mobile: '919100000097', email: 'account-applicant@gmail.com', country: 'India', city: 'Bengaluru', state: 'Karnataka' });
+    expect(initial.body.data.draft).toBeNull();
+
+    const saved = await browser.put('/api/v1/applications/customer/draft').set('x-csrf-token', csrfToken).send({ service: service.id, personal: { fullName: 'Account Applicant', mobile: '919100000097', email: 'account-applicant@gmail.com', country: 'India', city: 'Bengaluru', state: 'Karnataka' }, financial: { employmentType: 'salaried', requestedAmount: 750000 }, serviceSpecific: { requirementSummary: 'Need home loan assistance' }, referralCode: '', consents: { privacy: false, communication: false, accuracy: false, terms: false } });
+    expect(saved.status).toBe(201);
+    expect(saved.body.data.draftId).toBeTruthy();
+
+    const restored = await browser.get('/api/v1/applications/customer/draft');
+    expect(restored.body.data.draft.personal.fullName).toBe('Account Applicant');
+
+    const submitted = await browser.post('/api/v1/applications/customer/submit').set('x-csrf-token', csrfToken).send({
+      draftId: saved.body.data.draftId, service: service.id,
+      personal: { fullName: 'Account Applicant', mobile: '919100000097', email: 'account-applicant@gmail.com', dateOfBirth: '1990-01-01', country: 'India', city: 'Bengaluru', state: 'Karnataka', pinCode: '560079' },
+      financial: { employmentType: 'salaried', employerOrBusinessName: 'Test Employer', monthlyIncome: 80000, annualTurnover: 0, existingEmi: 0, requestedAmount: 750000, itrStatus: 'available', creditProfile: 'good' },
+      serviceSpecific: { requirementSummary: 'Need home loan assistance' }, referralCode: '', consents: { privacy: true, communication: true, accuracy: true, terms: true }, website: '',
+    });
+    expect(submitted.status).toBe(201);
+    const customer = await Customer.findOne({ user: registered.body.data.user._id });
+    expect(await Application.findOne({ applicationId: submitted.body.data.applicationId }).lean()).toMatchObject({ customer: customer._id, createdBy: new mongoose.Types.ObjectId(registered.body.data.user._id), status: 'submitted' });
+    expect((await browser.get('/api/v1/applications/customer/draft')).body.data.draft).toBeNull();
+  }, 20_000);
+
+  it('returns exact application field names for validation errors', async () => {
+    const response = await request(app).post('/api/v1/applications/public/submit').send({
+      service: 'not-an-object-id',
+      personal: { fullName: '', mobile: '123', email: 'not-an-email', dateOfBirth: '2999-01-01', country: 'India', city: '', state: '', pinCode: '123' },
+      financial: { employmentType: 'salaried', requestedAmount: 0 }, serviceSpecific: { requirementSummary: '' }, referralCode: '', consents: { privacy: false, communication: false, accuracy: false, terms: false }, website: '',
+    });
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(response.body.error.fields).toMatchObject({ service: expect.any(String), 'personal.email': expect.any(String), 'financial.requestedAmount': expect.any(String), 'consents.privacy': expect.any(String) });
+  });
+
   it('validates an approved contractor referral code before application submission', async () => {
     await Contractor.create({ contractorId: 'VFS-CON-TEST-001', referralCode: 'VFSC123456', user: new mongoose.Types.ObjectId(), onboardingStatus: 'approved' });
     const valid = await request(app).post('/api/v1/applications/public/referrals/validate').send({ referralCode: 'vfsc123456' });
