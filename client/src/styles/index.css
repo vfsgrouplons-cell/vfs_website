@@ -304,15 +304,29 @@ p { color:var(--muted); line-height:1.75; }
 }
 
 /* Simple service enquiry journey */
-.service-detail-hero { padding-bottom:3.5rem; }
+.service-detail-hero { padding-bottom:2.25rem; }
 .service-detail-hero .breadcrumbs { margin-bottom:1.25rem; }
-.service-detail-hero .service-hero-image { display:block; height:auto; aspect-ratio:16/6.3; overflow:hidden; margin:0; border:1px solid #376b78; border-radius:18px; background:#0a2933; box-shadow:0 24px 55px rgba(0,0,0,.2); }
-.service-hero-image img { display:block; width:100%; height:100%; object-fit:cover; }
-.service-detail-hero .service-hero-intro { display:grid; grid-template-columns:minmax(0,1fr) 390px; align-items:center; gap:clamp(2rem,6vw,5rem); margin-top:2.25rem; }
-.service-hero-intro h1 { max-width:760px; }
-.service-reassurance { display:flex; flex-wrap:wrap; gap:.65rem 1rem; padding:0; margin:1.35rem 0 0; list-style:none; }
-.service-reassurance li { display:flex; align-items:center; gap:.4rem; color:#d6e4e7; font-size:.74rem; font-weight:700; }
-.service-reassurance svg { flex:none; width:17px; color:var(--gold); }
+.service-detail-hero>.shell>.service-background { display:block; grid-template-columns:none; align-items:initial; gap:0; margin-top:0; }
+.service-background { position:relative; display:block; width:100%; overflow:hidden; margin:0; border:1px solid #376b78; border-radius:18px; background-color:#0a2933; background-position:center; background-repeat:no-repeat; background-size:cover; box-shadow:0 24px 55px rgba(0,0,0,.2); }
+.service-background-supplied.tall { aspect-ratio:3/2; }
+.service-background-supplied.wide { aspect-ratio:1880/836; }
+.service-background-fallback { aspect-ratio:16/7; }
+.service-background-fallback::before { content:""; position:absolute; inset:0; background:linear-gradient(90deg,rgba(3,40,51,.98) 0%,rgba(3,40,51,.85) 40%,rgba(3,40,51,.2) 78%); }
+.service-background-copy { position:absolute; z-index:1; left:clamp(1.5rem,5vw,4rem); top:50%; max-width:520px; transform:translateY(-50%); }
+.service-background-copy h1 { margin:.55rem 0; font-size:clamp(2.5rem,5vw,4.8rem); line-height:1; }
+.service-background-copy p { max-width:430px; margin:0; color:#d1e0e3; }
+.service-actions-section { padding:2rem 0 3rem; background:var(--teal); }
+.service-action-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; align-items:stretch; }
+.service-action-card { min-width:0; min-height:100%; }
+.direct-application-option { display:flex; flex-direction:column; gap:1rem; padding:1.35rem; border-radius:15px; color:var(--ink); background:white; box-shadow:0 22px 50px rgba(0,0,0,.2); }
+.direct-application-option>div { display:flex; align-items:center; gap:.7rem; padding-bottom:.8rem; border-bottom:1px solid var(--line); }
+.direct-application-option>div>svg { flex:none; color:#ae7807; }
+.direct-application-option strong,.direct-application-option small { display:block; }
+.direct-application-option strong { color:var(--teal); }
+.direct-application-option small { margin-top:.2rem; color:var(--muted); font-size:.68rem; }
+.direct-application-option h2 { margin:0; color:var(--teal); font-size:clamp(1.5rem,2.5vw,2.2rem); }
+.direct-application-option p { margin:0; color:#5e737a; font-size:.8rem; }
+.direct-application-option .button { width:100%; margin-top:auto; }
 .quick-service-form { display:grid; gap:.85rem; padding:1.35rem; border-radius:15px; color:var(--ink); background:white; box-shadow:0 22px 50px rgba(0,0,0,.24); }
 .quick-service-form>div { display:flex; align-items:center; gap:.7rem; padding-bottom:.8rem; border-bottom:1px solid var(--line); }
 .quick-service-form>div>svg { flex:none; color:#9b6c09; }
@@ -326,10 +340,6 @@ p { color:var(--muted); line-height:1.75; }
 .quick-service-form>p { margin:0; color:#6d8188; font-size:.62rem; line-height:1.5; }
 .quick-service-form .form-error { color:#a82b22; }
 .quick-service-form .form-success { color:#146b4c; }
-.service-choice-direct { border-bottom:0!important; padding-bottom:0!important; }
-.service-choice-direct>svg { color:var(--gold)!important; }
-.service-choice-divider { display:flex; align-items:center; gap:.65rem; color:#75898f; font-size:.62rem; font-weight:800; letter-spacing:.1em; text-align:center; text-transform:uppercase; }
-.service-choice-divider::before,.service-choice-divider::after { content:""; flex:1; height:1px; background:var(--line); }
 .callback-success-panel .button { justify-content:center; }
 .callback-success-panel>div>svg { color:#16875b; }
 .callback-success-panel .callback-waiting-note { padding:.8rem; border:1px solid #a8dcca; border-radius:9px; color:#146b4c; background:#edf9f4; font-size:.72rem; }
@@ -353,8 +363,8 @@ p { color:var(--muted); line-height:1.75; }
 .service-simple-section .inline-link svg { width:16px; }
 
 @media (max-width:800px) {
-  .service-detail-hero .service-hero-intro { grid-template-columns:1fr; }
-  .service-detail-hero .service-hero-image { aspect-ratio:16/9; }
+  .service-action-grid { grid-template-columns:1fr; }
+  .service-background-fallback { aspect-ratio:16/9; }
   .service-facts { grid-template-columns:1fr; }
   .service-facts>section,.service-facts>section:first-child,.service-facts>section:last-child { padding:1.6rem 0; border-right:0; border-bottom:1px solid #cfdbde; }
   .service-facts>section:last-child { border-bottom:0; }
@@ -362,10 +372,12 @@ p { color:var(--muted); line-height:1.75; }
 }
 @media (max-width:560px) {
   .service-detail-hero { padding-top:1.5rem; }
-  .service-detail-hero .service-hero-image { border-radius:12px; }
-  .service-detail-hero .service-hero-intro { margin-top:1.5rem; }
-  .service-reassurance { display:grid; }
-  .quick-service-form { padding:1.1rem; }
+  .service-background { border-radius:12px; }
+  .service-background-copy { left:1.15rem; max-width:75%; }
+  .service-background-copy h1 { font-size:2rem; }
+  .service-background-copy p { font-size:.72rem; }
+  .service-actions-section { padding:1.25rem 0 2.25rem; }
+  .direct-application-option,.quick-service-form { padding:1.1rem; }
   .application-next-steps { grid-template-columns:1fr; }
   .application-next-steps svg { display:none; }
   .application-next-steps span { text-align:left; }
