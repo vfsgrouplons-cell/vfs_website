@@ -13,6 +13,17 @@ import { syncInitialAdmin } from './initialAdmin.js';
 import { contentPages, generalFaqs, permissions, roleDefinitions, services } from './referenceData.js';
 
 const roleNames = { 'super-admin': 'Super Admin', admin: 'Admin', 'operations-manager': 'Operations Manager', 'application-manager': 'Application Manager', 'finance-manager': 'Finance Manager', 'support-agent': 'Support Agent', 'content-manager': 'Content Manager', contractor: 'Contractor', customer: 'Customer' };
+const verifiedBusinessSettings = {
+  'contact.addressLines': ['No. 881/A, Yashodhara Complex', 'Dr. M. C. Modi Road, Shankarmutt Main Road', 'Basaveshwara Nagar'],
+  'contact.city': 'Bengaluru',
+  'contact.state': 'Karnataka',
+  'contact.pinCode': '560079',
+  'legal.legalName': 'VFS GROUP',
+  'legal.registrationNumber': '29ABBFV2204K1Z5',
+  'legal.gstNumber': '29ABBFV2204K1Z5',
+  'legal.regulatoryDisclosure': 'Regular GST registration valid from 23 December 2025. GST REG-06 certificate issued on 6 April 2026 in Karnataka.',
+  'legal.providerRelationship': 'VFS GROUP provides financial-service assistance for products offered by banks, NBFCs, insurers and investment providers. Approval, pricing, issuance, cover, returns and final terms are decided by the relevant provider.',
+};
 
 async function seed() {
   await connectDatabase();
@@ -35,7 +46,7 @@ async function seed() {
   const activeServiceSlugs = services.map((service) => service.slug);
   const archivedServices = await Service.updateMany({ slug: { $nin: activeServiceSlugs }, status: { $ne: 'archived' } }, { $set: { status: 'archived' } });
   for (const service of services) await Service.findOneAndUpdate({ slug: service.slug }, { $set: service }, { new: true, upsert: true, runValidators: true });
-  await SiteSettings.findOneAndUpdate({ key: 'public' }, { $setOnInsert: { key: 'public' } }, { new: true, upsert: true, setDefaultsOnInsert: true });
+  await SiteSettings.findOneAndUpdate({ key: 'public' }, { $set: verifiedBusinessSettings, $setOnInsert: { key: 'public' } }, { new: true, upsert: true, setDefaultsOnInsert: true });
   for (const faq of generalFaqs) await Faq.findOneAndUpdate({ question: faq.question }, { $setOnInsert: faq }, { new: true, upsert: true, setDefaultsOnInsert: true });
   for (const page of contentPages) await ContentPage.findOneAndUpdate({ slug: page.slug }, { $setOnInsert: page }, { new: true, upsert: true, setDefaultsOnInsert: true });
   const initialAdmin = await syncInitialAdmin(env, roleDocs['super-admin']);

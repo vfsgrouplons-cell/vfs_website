@@ -6,6 +6,7 @@ import { createApp } from '../src/app.js';
 import { AuditLog } from '../src/models/AuditLog.js';
 import { Role } from '../src/models/Role.js';
 import { Application } from '../src/models/Application.js';
+import { CallbackRequest } from '../src/models/CallbackRequest.js';
 import { Contractor } from '../src/models/Contractor.js';
 import { Customer } from '../src/models/Customer.js';
 import { Faq } from '../src/models/Faq.js';
@@ -139,6 +140,27 @@ describe('portal authentication flows', () => {
     expect(response.body.data).toHaveLength(1);
     expect(response.body.data[0].question).toBe('Published question?');
   });
+
+  it('stores quick service enquiries and lets an administrator manage their status', async () => {
+    const service = await Service.create({ name: 'Quick Home Loan', slug: 'quick-home-loan', category: 'Loans', shortDescription: 'Home loan assistance', overview: 'Home loan guidance', status: 'published' });
+    const submitted = await request(app).post('/api/v1/contact/callbacks').send({ name: 'Service Customer', mobile: '919100000055', service: service.id, consent: true, website: '' });
+    expect(submitted.status).toBe(201);
+    expect(await CallbackRequest.countDocuments({ service: service._id, mobile: '919100000055' })).toBe(1);
+
+    const adminRole = await Role.findOne({ slug: 'super-admin' });
+    const config = { INITIAL_ADMIN_NAME: 'Enquiry Admin', INITIAL_ADMIN_EMAIL: 'enquiries@example.com', INITIAL_ADMIN_MOBILE: '919100000056', INITIAL_ADMIN_PASSWORD: 'EnquiryAdminPass123' };
+    await syncInitialAdmin(config, adminRole);
+    const browser = request.agent(app);
+    expect((await browser.post('/api/v1/auth/admin/login').send({ identifier: config.INITIAL_ADMIN_EMAIL, password: config.INITIAL_ADMIN_PASSWORD })).status).toBe(200);
+    const csrf = await browser.get('/api/v1/auth/csrf');
+    const enquiries = await browser.get('/api/v1/dashboard/admin/callback-requests?page=1&limit=25');
+    expect(enquiries.status).toBe(200);
+    expect(enquiries.body.data[0]).toMatchObject({ name: 'Service Customer', mobile: '919100000055', status: 'new' });
+    expect(enquiries.body.data[0].service.name).toBe('Quick Home Loan');
+    const updated = await browser.patch(`/api/v1/dashboard/admin/callback-requests/${enquiries.body.data[0]._id}/status`).set('x-csrf-token', csrf.body.data.csrfToken).send({ status: 'scheduled' });
+    expect(updated.status).toBe(200);
+    expect(updated.body.data.status).toBe('scheduled');
+  }, 15_000);
 
   it('lets administrators reorder gallery media and publishes only approved visible items', async () => {
     const adminRole = await Role.findOne({ slug: 'super-admin' });

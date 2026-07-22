@@ -7,7 +7,6 @@ import {
   FileCheck2,
   Headphones,
   Landmark,
-  LockKeyhole,
   PhoneCall,
   Quote,
   ShieldCheck,
@@ -63,7 +62,6 @@ export function HomePage() {
   const [processRef, processVisible] = useRevealOnce();
   const grouped = useMemo(() => groupServices(services.data || []), [services.data]);
   const marqueeServices = useMemo(() => interleaveServices(grouped), [grouped]);
-  const categoryCount = grouped.filter((group) => group.services.length).length;
 
   return <>
     <Seo
@@ -109,10 +107,10 @@ export function HomePage() {
 
     <section className="trust-strip" aria-label="VFS Groups service proof">
       <div className="shell trust-grid">
-        <div><strong>{services.data?.length || '—'}</strong><span>Published services</span></div>
-        <div><strong>{categoryCount || '—'}</strong><span>Service categories</span></div>
-        <div><LockKeyhole/><span>Verified application tracking</span></div>
-        <div><Headphones/><span>Phone and WhatsApp support</span></div>
+        <div><strong>23+ years</strong><span>Experience in banking and financial products</span></div>
+        <div><strong>2,000+</strong><span>Customer relationships</span></div>
+        <div><strong>Karnataka</strong><span>Service reach across cities</span></div>
+        <div><strong>Banks &amp; NBFCs</strong><span>Financial-product network</span></div>
       </div>
     </section>
 

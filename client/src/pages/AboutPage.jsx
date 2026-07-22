@@ -1,18 +1,16 @@
-import { CheckCircle2, ShieldCheck, TrendingUp, Users } from 'lucide-react';
+import { Building2, CheckCircle2, MapPin, ShieldCheck, TrendingUp, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Seo } from '../components/Seo.jsx';
 
 const missionPoints = [
   'Provide fast, reliable, and hassle-free financial solutions',
   'Deliver loan, insurance, investment, and wealth-management services',
-  'Offer attractive cashback benefits on eligible services',
   'Build long-term relationships through trust and transparency',
   'Empower customers through expert guidance and digital services',
-  'Create a nationwide network of trained financial advisors and connectors',
+  'Build a strong service network across Karnataka',
 ];
 
 const values = ['Integrity', 'Customer First', 'Transparency', 'Innovation', 'Speed', 'Professionalism', 'Trust', 'Compliance', 'Excellence'];
-const trends = ['Digital loan processing', 'Paperless documentation', 'Online customer support', 'Guided loan eligibility support', 'Personalized financial planning', 'Investment diversification', 'End-to-end wealth management', 'Fast digital approvals', 'Secure customer data handling', 'Cashback and reward-based financial services'];
 
 export function AboutPage() {
   return <>
@@ -26,7 +24,7 @@ export function AboutPage() {
 
     <section className="section values-section"><div className="shell"><div className="section-heading compact"><div><span className="eyebrow">Our core values</span><h2>The principles behind every customer relationship.</h2></div><ShieldCheck className="section-mark"/></div><div className="value-grid">{values.map((value,index)=><article key={value}><span>{String(index+1).padStart(2,'0')}</span><strong>{value}</strong></article>)}</div></div></section>
 
-    <section className="section trends-section"><div className="shell trends-layout"><div><span className="eyebrow">Modern financial services</span><h2>Technology that keeps the journey moving.</h2><p>VFS Group embraces modern financial practices to improve access, speed, support, planning, and secure handling throughout the customer journey.</p><Link className="button button-gold" to="/apply">Start your application</Link></div><div className="trend-grid">{trends.map((trend)=><div key={trend}><CheckCircle2/><span>{trend}</span></div>)}</div></div></section>
+    <section className="section registered-business-section"><div className="shell"><div className="section-heading compact"><div><span className="eyebrow">Registered business</span><h2>Established experience with a Karnataka service network.</h2></div><Building2 className="section-mark"/></div><div className="registered-business-grid"><article><ShieldCheck/><span>Registration</span><h3>VFS GROUP</h3><dl><div><dt>GSTIN</dt><dd>29ABBFV2204K1Z5</dd></div><div><dt>Constitution</dt><dd>Partnership</dd></div><div><dt>Registration type</dt><dd>Regular</dd></div><div><dt>Valid from</dt><dd>23 December 2025</dd></div></dl></article><article><TrendingUp/><span>Experience &amp; reach</span><h3>23+ years in banking and financial products</h3><ul><li><CheckCircle2/>More than 2,000 customer relationships</li><li><CheckCircle2/>Service reach across Karnataka cities</li><li><CheckCircle2/>Financial products across banks and NBFCs</li></ul><p><strong>Managing partners</strong><br/>Naidu Raghapathi Manjunath<br/>Sindhigatta Janardhan Nirmala</p></article><article><MapPin/><span>Registered office</span><h3>Basaveshwara Nagar, Bengaluru</h3><address>No. 881/A, Yashodhara Complex<br/>Dr. M. C. Modi Road, Shankarmutt Main Road<br/>Basaveshwara Nagar, Bengaluru Urban<br/>Karnataka 560079</address><a className="inline-link" href="https://www.google.com/maps/search/?api=1&query=No+881%2FA+Yashodhara+Complex+Dr+MC+Modi+Road+Basaveshwara+Nagar+Bengaluru+560079" target="_blank" rel="noreferrer">Open in Google Maps</a></article></div><p className="disclaimer">GST registration certificate issued on 6 April 2026 under the Karnataka Goods and Services Tax Act, 2017.</p></div></section>
 
     <section className="final-cta"><div className="shell"><div><span className="eyebrow">Your financial growth, our commitment</span><h2>One stop for loans, insurance, and investments.</h2></div><div className="button-row"><Link className="button button-gold" to="/services">View services</Link><Link className="button button-light" to="/contact">Request a callback</Link></div></div></section>
   </>;

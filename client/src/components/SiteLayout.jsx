@@ -13,6 +13,8 @@ export function SiteLayout() {
   const [open, setOpen] = useState(false); const location = useLocation();
   const settings = useSiteSettings(); const contact = settings.data?.contact; const phone = contact?.phone || '919160353295'; const whatsapp = contact?.whatsapp || phone;
   const emailReady = Boolean(contact?.email);
+  const officeAddress = contact?.addressLines?.length ? [...contact.addressLines, contact.city, contact.state, contact.pinCode].filter(Boolean).join(', ') : 'No. 881/A, Yashodhara Complex, Dr. M. C. Modi Road, Shankarmutt Main Road, Basaveshwara Nagar, Bengaluru, Karnataka 560079';
+  const mapQuery = encodeURIComponent(officeAddress);
   useEffect(() => setOpen(false), [location.pathname]);
   useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: 'auto' }); }, [location.pathname]);
   useEffect(() => { trackEvent('page_view', {}, location.pathname); }, [location.pathname]);
@@ -31,6 +33,7 @@ export function SiteLayout() {
     <a className="whatsapp-fab" href={createWhatsAppUrl('Hello VFS Groups, I would like assistance choosing a financial service.', whatsapp)} target="_blank" rel="noreferrer" aria-label="Contact VFS Groups on WhatsApp"><MessageCircle/></a>
     <ChatWidget phone={phone} whatsapp={whatsapp}/>
     <footer className="site-footer">
+      <div className="shell footer-office"><div><span className="eyebrow">GST-registered office</span><h2>{settings.data?.legal?.legalName || 'VFS GROUP'}</h2><address>{officeAddress}</address><strong>GSTIN: {settings.data?.legal?.gstNumber || '29ABBFV2204K1Z5'}</strong><a href={`https://www.google.com/maps/search/?api=1&query=${mapQuery}`} target="_blank" rel="noreferrer">Open in Google Maps</a></div><iframe title="VFS GROUP registered office map" src={`https://www.google.com/maps?q=${mapQuery}&output=embed`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" allowFullScreen/></div>
       <div className="shell footer-grid">
         <div><Link to="/" className="brand footer-brand"><img src="/brand/vfs-groups-logo.png" alt=""/><span>VFS Groups<small>Your financial growth, our commitment</small></span></Link><p>One destination for loan assistance, insurance guidance, investments, and wealth services.</p><p className="footer-disclosure">{settings.data?.legal?.providerRelationship}</p></div>
         <div><h2>Explore</h2><Link to="/services">Services</Link><Link to="/emi-calculator">EMI calculator</Link><Link to="/track">Track application</Link><Link to="/partner">Partner program</Link><Link to="/faqs">FAQs</Link></div>

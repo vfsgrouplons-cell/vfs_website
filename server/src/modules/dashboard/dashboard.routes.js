@@ -8,6 +8,7 @@ import { AuditLog } from '../../models/AuditLog.js';
 import { Application, APPLICATION_STATUSES } from '../../models/Application.js';
 import { ApplicationDocument } from '../../models/ApplicationDocument.js';
 import { ApplicationStatusHistory } from '../../models/ApplicationStatusHistory.js';
+import { CallbackRequest } from '../../models/CallbackRequest.js';
 import { Contractor } from '../../models/Contractor.js';
 import { Customer } from '../../models/Customer.js';
 import { LoanReferral, LOAN_REFERRAL_STATUSES } from '../../models/LoanReferral.js';
@@ -64,6 +65,10 @@ function paginatedMemberCollection(collection) {
 
 dashboardRouter.get('/admin', requireRole(...ADMIN_ROLES), asyncHandler(async (_request, response) => {
   const [customerRole, contractorRole] = await Promise.all([Role.findOne({ slug: 'customer' }), Role.findOne({ slug: 'contractor' })]);
+  const [totalCallbackRequests, recentCallbackRequests] = await Promise.all([
+    CallbackRequest.countDocuments(),
+    CallbackRequest.find().populate('service', 'name slug category').sort({ createdAt: -1 }).limit(15).lean(),
+  ]);
   const [totalUsers, totalCustomers, totalContractors, loginTotals, referredRegistrations, directRegistrations, totalCodes, totalLoanReferrals, recentRegistrations, recentLogins, recentLoanReferrals, mostUsedCodes, topCustomers, topContractors, loanReferralsByUser, totalApplications, applicationStatusTotals] = await Promise.all([
     User.countDocuments({ status: { $ne: 'deleted' } }),
     User.countDocuments({ roles: customerRole?._id, status: { $ne: 'deleted' } }),
@@ -78,7 +83,26 @@ dashboardRouter.get('/admin', requireRole(...ADMIN_ROLES), asyncHandler(async (_
     LoanReferral.aggregate([{ $group: { _id: '$submittedBy', submissions: { $sum: 1 } } }, { $sort: { submissions: -1 } }, { $limit: 20 }, { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } }, { $unwind: '$user' }, { $project: { _id: 0, user: { _id: '$user._id', fullName: '$user.fullName', referralCode: '$user.referralCode' }, submissions: 1 } }]),
     Application.countDocuments({ status: { $ne: 'draft' } }), Application.aggregate([{ $match: { status: { $ne: 'draft' } } }, { $group: { _id: '$status', count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
   ]);
-  sendData(response, { metrics: { totalUsers, totalCustomers, totalContractors, totalSuccessfulLogins: loginTotals[0]?.total || 0, uniqueUsersLoggedIn: loginTotals[0]?.unique || 0, referredRegistrations, directRegistrations, totalReferralCodes: totalCodes, totalLoanReferrals, totalApplications }, applicationStatusTotals, recentRegistrations, recentLogins, recentLoanReferrals, mostUsedReferralCodes: mostUsedCodes, topReferringCustomers: topCustomers, topReferringContractors: topContractors, loanReferralsByUser });
+  sendData(response, { metrics: { totalUsers, totalCustomers, totalContractors, totalSuccessfulLogins: loginTotals[0]?.total || 0, uniqueUsersLoggedIn: loginTotals[0]?.unique || 0, referredRegistrations, directRegistrations, totalReferralCodes: totalCodes, totalLoanReferrals, totalApplications, totalCallbackRequests }, applicationStatusTotals, recentRegistrations, recentLogins, recentLoanReferrals, recentCallbackRequests, mostUsedReferralCodes: mostUsedCodes, topReferringCustomers: topCustomers, topReferringContractors: topContractors, loanReferralsByUser });
+}));
+
+dashboardRouter.get('/admin/callback-requests', requireRole(...ADMIN_ROLES), asyncHandler(async (request, response) => {
+  const page = Math.max(1, Number(request.query.page) || 1); const limit = Math.min(100, Math.max(1, Number(request.query.limit) || 25));
+  const filter = {}; const q = String(request.query.q || '').trim();
+  if (q) { const regex = new RegExp(escapeRegex(q), 'i'); filter.$or = [{ name: regex }, { mobile: regex }]; }
+  if (request.query.status) filter.status = request.query.status;
+  const [items, total] = await Promise.all([
+    CallbackRequest.find(filter).populate('service', 'name slug category').sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+    CallbackRequest.countDocuments(filter),
+  ]);
+  sendData(response, items, 200, { page, limit, total, pages: Math.ceil(total / limit) });
+}));
+
+const callbackStatusSchema = z.object({ status: z.enum(['new', 'scheduled', 'completed', 'cancelled']) });
+dashboardRouter.patch('/admin/callback-requests/:id/status', requireRole(...ADMIN_ROLES), requireCsrf, validate(callbackStatusSchema), asyncHandler(async (request, response) => {
+  const item = await CallbackRequest.findByIdAndUpdate(request.params.id, { $set: { status: request.body.status } }, { new: true, runValidators: true }).populate('service', 'name slug category');
+  if (!item) throw new ApiError(404, 'CALLBACK_REQUEST_NOT_FOUND', 'Callback request not found.');
+  sendData(response, item);
 }));
 
 function topReferrers(roleId) {
