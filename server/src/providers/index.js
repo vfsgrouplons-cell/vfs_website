@@ -18,11 +18,11 @@ const mockAi = {
 
 export function buildFallbackResponse({ message, knowledge = '' }) {
   const input = normalize(message); const services = parseKnowledge(knowledge);
-  if (/^(hi+|hello+|hey+|namaste|good\s+(morning|afternoon|evening))(\s+(bro|sir|madam))?[!.\s]*$/.test(input)) return 'Hello! I can help you explore VFS Groups loans, insurance, investments, application steps, common documents, and tracking. What would you like help with?';
+  if (/^(hi+|hello+|hey+|namaste|good\s+(morning|afternoon|evening))(\s+(bro|sir|madam))?[!.\s]*$/.test(input)) return 'Hello! I can help you explore VFS Groups loans, insurance, investments, application steps, in-person document guidance, and tracking. What would you like help with?';
   if (hasAny(input, ['cibil', 'credit score', 'itr', 'income tax return'])) return 'VFS Groups accepts assistance requests from salaried and self-employed customers with or without ITRs, including customers with a low or limited CIBIL score. The team reviews the information available, while final eligibility and terms are decided by the relevant lender.';
-  if (hasAny(input, ['track', 'tracking', 'application status', 'my status'])) return 'Open “Track application,” enter your VFS application ID and registered mobile, then complete the verification step. After verification you can see the live status timeline and upload requested documents.';
-  if (hasAny(input, ['document', 'documents', 'upload', 'paperwork'])) return 'Document requirements depend on the selected service. Common examples include identity, address, available income or business records, and bank statements. Sensitive files are uploaded only after application tracking verification.';
-  if (hasAny(input, ['apply', 'application form', 'start application', 'submit application'])) return 'Choose a published service and open the application form. You can save a secure draft, finish the six steps, submit it, and use the issued application ID for tracking.';
+  if (hasAny(input, ['track', 'tracking', 'application status', 'my status'])) return 'Open “Track application,” enter your VFS application ID and registered mobile, then complete the verification step. After verification you can see the live status timeline.';
+  if (hasAny(input, ['document', 'documents', 'upload', 'paperwork'])) return 'The website does not accept document uploads. After reviewing your application, VFS Groups will call you, explain which documents are required, and coordinate them in person.';
+  if (hasAny(input, ['apply', 'application form', 'start application', 'submit application'])) return 'Choose a published service and open the application form. You can save a secure draft, finish the five steps, submit it, and use the issued application ID for tracking.';
   if (hasAny(input, ['contact', 'call', 'phone', 'whatsapp', 'talk to', 'speak to'])) return 'Use the Contact page for the currently published VFS Groups phone and WhatsApp options, or submit the secure enquiry form. For application progress, use Track application instead.';
   if (hasAny(input, ['emi', 'monthly payment', 'monthly instalment', 'monthly installment'])) return 'Use the EMI Calculator to estimate a monthly instalment from the amount, indicative annual rate, and tenure. It is an estimate only; the relevant lender decides final pricing, fees, tenure, and approval.';
   if (hasAny(input, ['cashback', 'reward'])) return 'Cashback applies only when an eligible offer and its terms are officially published by VFS Groups. It is not automatic for every service; check the current website disclosure or contact the team for the applicable terms.';
@@ -34,7 +34,7 @@ export function buildFallbackResponse({ message, knowledge = '' }) {
   if (hasAny(input, ['insurance', 'policy', 'cover'])) return categoryAnswer('insurance', services);
   if (hasAny(input, ['investment', 'invest', 'sip', 'fixed deposit', 'wealth', 'lump sum'])) return categoryAnswer('investment', services);
   if (hasAny(input, ['loan', 'finance', 'funding', 'money'])) return categoryAnswer('loan', services);
-  return 'I can answer questions using VFS Groups’ published service information, including loans, insurance, investments, applications, documents, tracking, and referrals. Please mention the service or goal—for example, “compare home loan and loan against property” or “what documents are needed for a business loan?”';
+  return 'I can answer questions using VFS Groups’ published service information, including loans, insurance, investments, applications, in-person document guidance, tracking, and referrals. Please mention the service or goal—for example, “compare home loan and loan against property” or “what should I bring for a business loan meeting?”';
 }
 
 function parseKnowledge(knowledge) {

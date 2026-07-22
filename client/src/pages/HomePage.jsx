@@ -42,7 +42,7 @@ const categoryDetails = {
 const benefits = [
   [Landmark, 'One team for key financial needs', 'Explore loans, insurance and investments through one clear service journey.'],
   [Users, 'Support across customer profiles', 'Salaried and self-employed customers can speak with us using the information currently available.'],
-  [FileCheck2, 'Clear document guidance', 'Understand what may be required before sharing sensitive documents through the secure process.'],
+  [FileCheck2, 'Clear document guidance', 'Understand what may be required and bring requested documents during in-person coordination.'],
   [Headphones, 'Human support when you need it', 'Ask questions, request a callback and understand the next step before proceeding.'],
 ];
 

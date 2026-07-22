@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { createWhatsAppUrl } from '../config/contact.js';
 import { api, apiMessage } from '../services/api.js';
 
-const welcome = { role: 'assistant', content: 'Hello. What financial goal can we help with? Ask about services, documents, applications, or tracking in simple words.' };
+const welcome = { role: 'assistant', content: 'Hello. What financial goal can we help with? Ask about services, applications, tracking, or what to bring for an in-person meeting.' };
 
 export function ChatWidget({ phone = '919008503115', whatsapp = '919008156084' }) {
   const [open, setOpen] = useState(false); const [messages, setMessages] = useState([welcome]); const [input, setInput] = useState(''); const [sending, setSending] = useState(false); const [error, setError] = useState('');

@@ -6,7 +6,6 @@ import { requireCsrf } from '../../middleware/csrf.js';
 import { validate } from '../../middleware/validate.js';
 import { AuditLog } from '../../models/AuditLog.js';
 import { Application, APPLICATION_STATUSES } from '../../models/Application.js';
-import { ApplicationDocument } from '../../models/ApplicationDocument.js';
 import { ApplicationStatusHistory } from '../../models/ApplicationStatusHistory.js';
 import { CallbackRequest } from '../../models/CallbackRequest.js';
 import { Contractor } from '../../models/Contractor.js';
@@ -19,7 +18,6 @@ import { User } from '../../models/User.js';
 import { ApiError } from '../../utils/apiError.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { sendData } from '../../utils/apiResponse.js';
-import { storageProvider } from '../../providers/storage.js';
 
 export const dashboardRouter = Router();
 dashboardRouter.use(requireAuth);
@@ -217,8 +215,8 @@ dashboardRouter.get('/admin/applications', requireRole(...ADMIN_ROLES), asyncHan
 
 dashboardRouter.get('/admin/applications/:id', requireRole(...ADMIN_ROLES), asyncHandler(async (request, response) => {
   const application = await Application.findById(request.params.id).populate('service', 'name slug category').lean(); if (!application) throw new ApiError(404, 'APPLICATION_NOT_FOUND', 'Application not found.');
-  const [history, documents] = await Promise.all([ApplicationStatusHistory.find({ application: application._id }).select('+internalNote').populate('changedBy', 'fullName').sort({ createdAt: 1 }).lean(), ApplicationDocument.find({ application: application._id }).sort({ createdAt: -1 }).lean()]);
-  sendData(response, { application, history, documents });
+  const history = await ApplicationStatusHistory.find({ application: application._id }).select('+internalNote').populate('changedBy', 'fullName').sort({ createdAt: 1 }).lean();
+  sendData(response, { application, history });
 }));
 
 const applicationStatusSchema = z.object({ status: z.enum(APPLICATION_STATUSES), publicNote: z.string().trim().min(5).max(1000), internalNote: z.string().trim().max(2000).optional(), reason: z.string().trim().min(3).max(500) });
@@ -230,18 +228,6 @@ dashboardRouter.patch('/admin/applications/:id/status', requireRole(...ADMIN_ROL
     AuditLog.create({ actor: request.user._id, actorRoles: request.user.roles.map((role) => role.slug), action: 'application.status.updated', resourceType: 'Application', resourceId: application._id, oldValues: { status: oldStatus }, newValues: { status: application.status }, reason: request.body.reason, ip: request.ip, userAgent: request.get('user-agent'), requestId: request.id }),
   ]);
   sendData(response, { id: application.id, applicationId: application.applicationId, status: application.status });
-}));
-
-const documentStatusSchema = z.object({ status: z.enum(['verified', 'rejected']), reason: z.string().trim().max(500).optional() });
-dashboardRouter.patch('/admin/documents/:id/status', requireRole(...ADMIN_ROLES), requireCsrf, validate(documentStatusSchema), asyncHandler(async (request, response) => {
-  const document = await ApplicationDocument.findById(request.params.id); if (!document) throw new ApiError(404, 'DOCUMENT_NOT_FOUND', 'Document not found.');
-  document.status = request.body.status; document.rejectionReason = request.body.status === 'rejected' ? request.body.reason : undefined; document.verifiedBy = request.user._id; document.verifiedAt = new Date(); await document.save();
-  sendData(response, document);
-}));
-
-dashboardRouter.get('/admin/documents/:id/access', requireRole(...ADMIN_ROLES), asyncHandler(async (request, response) => {
-  const document = await ApplicationDocument.findById(request.params.id).lean(); if (!document) throw new ApiError(404, 'DOCUMENT_NOT_FOUND', 'Document not found.');
-  sendData(response, { url: storageProvider.signedUrl(document.storage.publicId, { resourceType: document.storage.resourceType, expiresInSeconds: 300 }), expiresInSeconds: 300 });
 }));
 
 function escapeRegex(value) { return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }

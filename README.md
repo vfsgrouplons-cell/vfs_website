@@ -13,7 +13,7 @@ The implementation follows the phase plan in [`docs/PHASE_1_ARCHITECTURE.md`](do
 ## Implemented operational flows
 
 - Public service catalogue, comparison, EMI calculator, enquiry, six-step application, 30-day MongoDB drafts, and referral attribution.
-- Application tracking with rate-limited mobile verification, public status history, and verified-session document uploads.
+- Application tracking with rate-limited mobile verification and a public status history; any required documents are coordinated in person.
 - Cloudinary authenticated document delivery and consent-controlled public gallery media.
 - Customer, contractor, and administrator authentication with role-protected dashboards.
 - Administrator application operations, document review, business settings, FAQs, legal content, gallery, verified testimonials, and privacy-friendly analytics.

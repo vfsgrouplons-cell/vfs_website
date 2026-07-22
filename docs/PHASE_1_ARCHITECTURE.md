@@ -93,7 +93,7 @@ Admin: `/admin`, then domain routes for leads, applications, assignments, custom
 
 ### Visitor to application
 
-Service discovery → service detail or guided finder → indicative eligibility/EMI calculation → application draft → contact verification → financial/service-specific data → immutable referral capture → protected document upload → consent record → transactional submission → generated lead/application IDs → acknowledgement/tracking.
+Service discovery → service detail or guided finder → indicative eligibility/EMI calculation → application draft → contact verification → financial/service-specific data → immutable referral capture → consent record → transactional submission → generated lead/application IDs → acknowledgement/tracking → in-person document coordination when required.
 
 ### Secure public tracking
 

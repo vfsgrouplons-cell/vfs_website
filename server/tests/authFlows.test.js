@@ -120,6 +120,9 @@ describe('portal authentication flows', () => {
     const tracked = await browser.get(`/api/v1/applications/public/track/${submitted.body.data.applicationId}`).set('x-tracking-token', verified.body.data.trackToken);
     expect(tracked.status).toBe(200);
     expect(tracked.body.data.history).toHaveLength(1);
+    expect(tracked.body.data.documents).toBeUndefined();
+    const documentUpload = await browser.post(`/api/v1/applications/public/track/${submitted.body.data.applicationId}/documents`).set('x-tracking-token', verified.body.data.trackToken);
+    expect(documentUpload.status).toBe(404);
   }, 20_000);
 
   it('saves a customer-owned draft, restores account details, and links the submitted application', async () => {

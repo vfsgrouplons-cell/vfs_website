@@ -53,4 +53,4 @@ Application submission uses a transaction so generated IDs, the application, ini
 
 ## Phase 3 started
 
-The public shell, homepage, published service listing/filter, all reusable service-detail routes, backend EMI calculation/export, contact enquiry form, customer registration/sign-in, and multi-step public application submission are operational against the API. Remaining Phase 3 scope includes the guided eligibility API, verified OTP tracking, callback UI, CMS-driven general pages/FAQ/gallery, secure document intake after verification, technical SEO artifacts, and the full responsive/accessibility acceptance review.
+The public shell, homepage, published service listing/filter, all reusable service-detail routes, backend EMI calculation/export, contact enquiry form, customer registration/sign-in, and multi-step public application submission are operational against the API. Remaining Phase 3 scope includes the guided eligibility API, verified OTP tracking, callback UI, CMS-driven general pages/FAQ/gallery, in-person document coordination, technical SEO artifacts, and the full responsive/accessibility acceptance review.

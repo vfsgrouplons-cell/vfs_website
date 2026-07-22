@@ -2,7 +2,6 @@ export const permissions = [
   ['customers.view', 'View authorized customer records'], ['customers.edit', 'Edit authorized customer records'], ['customers.suspend', 'Suspend customer accounts'],
   ['contractors.view', 'View contractor records'], ['contractors.approve', 'Approve or reject contractors'], ['contractors.suspend', 'Suspend contractor accounts'],
   ['applications.view', 'View authorized applications'], ['applications.create', 'Create applications'], ['applications.assign', 'Assign applications'], ['applications.status.update', 'Change application status'],
-  ['documents.view', 'View authorized documents'], ['documents.verify', 'Verify documents'], ['documents.reject', 'Reject documents'],
   ['subscriptions.view', 'View subscriptions'], ['subscriptions.manage', 'Manage subscriptions'],
   ['commissions.view', 'View commissions'], ['commissions.approve', 'Approve commissions'], ['commissions.pay', 'Record commission payments'],
   ['support.view', 'View support tickets'], ['support.manage', 'Manage support tickets'], ['content.manage', 'Manage CMS content'], ['content.publish', 'Publish CMS content'],
@@ -12,19 +11,19 @@ export const permissions = [
 export const roleDefinitions = {
   'super-admin': permissions.map(([key]) => key),
   admin: permissions.map(([key]) => key).filter((key) => key !== 'roles.manage'),
-  'operations-manager': ['customers.view', 'customers.edit', 'contractors.view', 'contractors.approve', 'applications.view', 'applications.create', 'applications.assign', 'applications.status.update', 'documents.view', 'documents.verify', 'documents.reject', 'support.view', 'reports.view', 'reports.export'],
-  'application-manager': ['customers.view', 'contractors.view', 'applications.view', 'applications.create', 'applications.assign', 'applications.status.update', 'documents.view', 'documents.verify', 'documents.reject', 'reports.view'],
+  'operations-manager': ['customers.view', 'customers.edit', 'contractors.view', 'contractors.approve', 'applications.view', 'applications.create', 'applications.assign', 'applications.status.update', 'support.view', 'reports.view', 'reports.export'],
+  'application-manager': ['customers.view', 'contractors.view', 'applications.view', 'applications.create', 'applications.assign', 'applications.status.update', 'reports.view'],
   'finance-manager': ['customers.view', 'contractors.view', 'applications.view', 'subscriptions.view', 'subscriptions.manage', 'commissions.view', 'commissions.approve', 'commissions.pay', 'reports.view', 'reports.export'],
   'support-agent': ['customers.view', 'contractors.view', 'applications.view', 'support.view', 'support.manage'],
   'content-manager': ['content.manage', 'content.publish'],
-  contractor: ['customers.view', 'applications.view', 'applications.create', 'documents.view', 'subscriptions.view', 'commissions.view', 'support.view', 'reports.view'],
-  customer: ['applications.view', 'applications.create', 'documents.view', 'subscriptions.view', 'support.view'],
+  contractor: ['customers.view', 'applications.view', 'applications.create', 'subscriptions.view', 'commissions.view', 'support.view', 'reports.view'],
+  customer: ['applications.view', 'applications.create', 'subscriptions.view', 'support.view'],
 };
 
 const assistanceProcess = [
   'Share your requirement with VFS Groups',
-  'Provide the information and documents currently available to you',
-  'Receive guidance on relevant options and any additional documentation',
+  'Provide the information currently available to you',
+  'Receive guidance and bring requested documents during in-person coordination',
   'VFS Groups coordinates the application with an appropriate provider',
   'Track progress and respond to provider requests',
 ];
@@ -86,10 +85,10 @@ export const services = [
 export const generalFaqs = [
   ['Loans', 'Can I request loan assistance without ITRs?', 'Yes. VFS Groups accepts requests from salaried and self-employed customers with or without ITRs and reviews the information currently available. The relevant lender decides final eligibility and terms.'],
   ['Loans', 'Can I contact VFS Groups with a low CIBIL score?', 'Yes. A low or limited CIBIL score does not prevent you from requesting assistance. No approval is guaranteed, and the relevant lender makes the final decision.'],
-  ['Applications', 'How do I check my application status?', 'Use your application ID and registered mobile number on the Track Application page. A short-lived verification code is required before status information or document upload is available.'],
-  ['Applications', 'Can I save an application and finish it later?', 'Yes. After choosing a service, save the draft on the application form. The secure resume link stays on the same browser and expires after 30 days.'],
-  ['Documents', 'When should I upload documents?', 'Sensitive documents are accepted only after application tracking verification. Upload only the files requested for the selected service.'],
-  ['Security', 'How does VFS Groups protect application access?', 'Portal sessions use secure access, tracking uses short-lived verification, and sensitive documents use protected delivery with time-limited access.'],
+  ['Applications', 'How do I check my application status?', 'Use your application ID and registered mobile number on the Track Application page. A short-lived verification code is required before status information is shown.'],
+  ['Applications', 'Can I save an application and finish it later?', 'Yes. Guests can keep a 30-day draft on the same device. Signed-in customers can save a 30-day draft to their customer account and continue it from another device.'],
+  ['Documents', 'How do I provide documents?', 'The website does not accept document uploads. After reviewing your application, VFS Groups will call you, explain what is required, and coordinate documents in person.'],
+  ['Security', 'How does VFS Groups protect application access?', 'Portal sessions use secure access, application tracking uses short-lived verification, and sensitive documents are not uploaded through this website.'],
   ['Services', 'Does VFS Groups guarantee approval, rates, cover, or returns?', 'No. VFS Groups provides application assistance and guidance. Approval, pricing, issuance, cover, returns, and final terms are controlled by the relevant provider.'],
   ['Cashback', 'Is cashback available on every service?', 'No. Cashback is available only when a specific eligible offer and its terms have been published by VFS Groups.'],
 ].map(([category, question, answer], index) => ({ category, question, answer, status: 'published', sortOrder: index + 1 }));
@@ -100,10 +99,10 @@ export const contentPages = [
     summary: 'This notice explains how VFS Groups handles information submitted through this website and its authenticated portals.',
     seo: { title: 'Privacy Notice | VFS Groups', description: 'How VFS Groups collects, uses, stores, and protects website and application information.' },
     sections: [
-      { heading: 'Information collected', body: 'Depending on the service used, VFS Groups may collect contact details, identity and profile information, financial requirement details, application records, documents, consent records, referral attribution, login activity, device information, and support messages.', bullets: [] },
+      { heading: 'Information collected', body: 'Depending on the service used, VFS Groups may collect contact details, identity and profile information, financial requirement details, application records, consent records, referral attribution, login activity, device information, and support messages. Any requested documents are coordinated separately in person and are not uploaded through this website.', bullets: [] },
       { heading: 'Why information is used', body: 'Information is used to respond to enquiries, provide application assistance, coordinate with an appropriate provider when authorized, operate secure portals, prevent abuse, maintain audit records, improve the service, and comply with applicable obligations.', bullets: [] },
       { heading: 'Sharing and providers', body: 'Information is shared only with authorized staff, contracted technology providers, and relevant financial-service providers when necessary for the requested service or when required by law. VFS Groups does not publish customer details or testimonials without confirmation of permission.', bullets: [] },
-      { heading: 'Retention and security', body: 'Records are retained only for operational, legal, security, and audit needs. Controls include role-based access, secure cookies, verification challenges, encrypted transport, restricted document delivery, and activity logging. No online system can promise absolute security.', bullets: [] },
+      { heading: 'Retention and security', body: 'Records are retained only for operational, legal, security, and audit needs. Website controls include role-based access, secure cookies, verification challenges, encrypted transport, and activity logging. No online system can promise absolute security.', bullets: [] },
       { heading: 'Your choices', body: 'You may ask VFS Groups to correct inaccurate information, withdraw optional communication consent, or raise a privacy request through the official contact form. Some records may need to be retained where legally or operationally required.', bullets: [] },
     ],
   },

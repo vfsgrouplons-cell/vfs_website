@@ -40,7 +40,7 @@ export function ServiceDetailPage() {
       <div className="shell">
         <div className="service-facts">
           <SimpleList title="What this service can help with" items={item.useCases}/>
-          <SimpleList title="What you may need" items={item.documents} icon={FileText}/>
+          <SimpleList title="What to bring if VFS asks" items={item.documents} icon={FileText}/>
           <section><span className="eyebrow">Simple process</span><h2>What happens next</h2><ol>{item.process.slice(0, 4).map((value, index) => <li key={value}><b>{index + 1}</b><span>{value}</span></li>)}</ol></section>
         </div>
         <p className="disclaimer service-disclaimer">VFS Groups provides assistance and guidance. Eligibility, approval, interest rates, premiums, returns and final terms are decided by the relevant bank, NBFC, insurer or product provider.</p>

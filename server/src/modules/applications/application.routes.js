@@ -1,9 +1,6 @@
 import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
-import { unlink } from 'node:fs/promises';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
-import multer from 'multer';
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
@@ -12,7 +9,6 @@ import { requireAuth, requireRole } from '../../middleware/auth.js';
 import { requireCsrf } from '../../middleware/csrf.js';
 import { validate } from '../../middleware/validate.js';
 import { Application, APPLICATION_STATUSES } from '../../models/Application.js';
-import { ApplicationDocument } from '../../models/ApplicationDocument.js';
 import { ApplicationStatusHistory } from '../../models/ApplicationStatusHistory.js';
 import { AuditLog } from '../../models/AuditLog.js';
 import { Contractor } from '../../models/Contractor.js';
@@ -20,7 +16,6 @@ import { Customer } from '../../models/Customer.js';
 import { Service } from '../../models/Service.js';
 import { VerificationChallenge } from '../../models/VerificationChallenge.js';
 import { mayDisplayMockOtp, smsProvider } from '../../providers/sms.js';
-import { storageProvider } from '../../providers/storage.js';
 import { ApiError } from '../../utils/apiError.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { sendData } from '../../utils/apiResponse.js';
@@ -162,25 +157,6 @@ applicationRouter.get('/public/track/:applicationId', asyncHandler(async (reques
   sendData(response, await trackingSnapshot(applicationId, request.params.applicationId));
 }));
 
-const uploadDirectory = '/tmp/vfs-groups-documents'; mkdirSync(uploadDirectory, { recursive: true });
-const documentUpload = multer({ dest: uploadDirectory, limits: { fileSize: 8 * 1024 * 1024 }, fileFilter(_request, file, callback) { callback(null, ['application/pdf', 'image/jpeg', 'image/png'].includes(file.mimetype)); } });
-applicationRouter.post('/public/track/:applicationId/documents', documentUpload.single('document'), asyncHandler(async (request, response) => {
-  const applicationObjectId = verifyTrackingToken(request, request.params.applicationId);
-  if (!request.file) throw new ApiError(422, 'DOCUMENT_REQUIRED', 'Choose a PDF, JPG, or PNG document up to 8 MB.');
-  const application = await Application.findOne({ _id: applicationObjectId, applicationId: request.params.applicationId.toUpperCase() });
-  if (!application) { await unlink(request.file.path).catch(() => {}); throw new ApiError(403, 'TRACKING_TOKEN_INVALID', 'This tracking session does not match the application.'); }
-  let stored;
-  try { stored = await storageProvider.upload(request.file.path, { folder: `vfs-groups/applications/${request.params.applicationId}`, sensitive: true }); }
-  finally { await unlink(request.file.path).catch(() => {}); }
-  const category = ['identity','address','income','bank_statement','property','vehicle','insurance','investment','other'].includes(request.body.category) ? request.body.category : 'other';
-  const document = await ApplicationDocument.create({ application: applicationObjectId, category, originalName: request.file.originalname, mimeType: request.file.mimetype, size: request.file.size, storage: stored, uploadedByRole: 'verified_applicant' });
-  if (['documents_pending', 'additional_information_required'].includes(application.status)) {
-    const oldStatus = application.status; application.status = 'documents_received'; await application.save();
-    await ApplicationStatusHistory.create({ application: application._id, oldStatus, newStatus: 'documents_received', changedByRole: 'verified_applicant', publicNote: 'Requested documents were uploaded securely and are awaiting review.', reason: 'Verified applicant document upload' });
-  }
-  sendData(response, { id: document.id, originalName: document.originalName, category: document.category, status: document.status, uploadedAt: document.createdAt }, 201);
-}));
-
 async function ensurePublishedService(id) { const service = await Service.findOne({ _id: id, status: 'published' }).select('_id'); if (!service) throw new ApiError(422, 'SERVICE_UNAVAILABLE', 'Choose an available service.'); return service; }
 async function customerFor(userId) { const customer = await Customer.findOne({ user: userId }); if (!customer) throw new ApiError(409, 'CUSTOMER_PROFILE_MISSING', 'Your customer profile is unavailable. Please contact support.'); return customer; }
 function draftExpiry() { return new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); }
@@ -193,8 +169,8 @@ function verifyTrackingToken(request, _publicId) { const token = request.get('x-
 async function trackingSnapshot(applicationObjectId, expectedPublicId) {
   const application = await Application.findOne({ _id: applicationObjectId, ...(expectedPublicId ? { applicationId: expectedPublicId.toUpperCase() } : {}) }).populate('service', 'name slug category').lean();
   if (!application || !application.applicationId) throw new ApiError(404, 'APPLICATION_NOT_FOUND', 'Application not found.');
-  const [history, documents] = await Promise.all([ApplicationStatusHistory.find({ application: application._id }).select('oldStatus newStatus publicNote createdAt').sort({ createdAt: 1 }).lean(), ApplicationDocument.find({ application: application._id }).select('originalName category status createdAt').sort({ createdAt: -1 }).lean()]);
-  return { applicationId: application.applicationId, leadId: application.leadId, service: application.service, status: application.status, applicant: { fullName: application.personal?.fullName, mobileLast4: application.personal?.mobile?.slice(-4) }, submittedAt: application.submittedAt, history, documents };
+  const history = await ApplicationStatusHistory.find({ application: application._id }).select('oldStatus newStatus publicNote createdAt').sort({ createdAt: 1 }).lean();
+  return { applicationId: application.applicationId, leadId: application.leadId, service: application.service, status: application.status, applicant: { fullName: application.personal?.fullName, mobileLast4: application.personal?.mobile?.slice(-4) }, submittedAt: application.submittedAt, history };
 }
 
 export { APPLICATION_STATUSES };
