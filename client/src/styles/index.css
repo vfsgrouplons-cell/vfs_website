@@ -361,6 +361,39 @@ p { color:var(--muted); line-height:1.75; }
 .service-facts ol b { width:24px; height:24px; flex:none; display:grid; place-items:center; border-radius:50%; color:var(--teal); background:#f3c74d; font-size:.65rem; }
 .service-disclaimer { max-width:930px; margin:1.5rem 0 .8rem; }
 .service-simple-section .inline-link svg { width:16px; }
+.service-faq-section { overflow:hidden; background:#05090a; color:white; }
+.service-faq-shell { display:grid; grid-template-columns:minmax(240px,.72fr) minmax(0,1.28fr); gap:clamp(2rem,6vw,6rem); align-items:start; }
+.service-faq-heading { position:sticky; top:110px; }
+.service-faq-heading .eyebrow { color:#f5c84d; }
+.service-faq-heading h2 { margin:.7rem 0 .8rem; color:white; font-size:clamp(2.5rem,5vw,4.4rem); line-height:1; }
+.service-faq-heading p { max-width:390px; margin:0; color:#9fb1b7; font-size:.82rem; }
+.service-faq-list { display:grid; gap:1rem; }
+.service-faq-list details { overflow:hidden; border:1px solid #2c373b; border-radius:18px; background:#111718; transition:border-color .22s var(--ease),background-color .22s var(--ease); }
+.service-faq-list details[open] { border-color:#706126; background:#151b1c; }
+.service-faq-list summary { min-height:88px; display:flex; align-items:center; justify-content:space-between; gap:1.5rem; padding:1.25rem 1.5rem; color:#f7f9f9; cursor:pointer; list-style:none; font:800 clamp(.95rem,1.6vw,1.15rem)/1.35 Manrope,ui-sans-serif,system-ui; }
+.service-faq-list summary::-webkit-details-marker { display:none; }
+.service-faq-list summary span { min-width:0; }
+.service-faq-toggle { flex:none; display:grid; place-items:center; width:34px; height:34px; color:#a8b2b5; font:400 1.8rem/1 Inter,sans-serif; transition:transform .22s var(--ease),color .22s var(--ease); }
+.service-faq-list details[open] .service-faq-toggle { color:#f5c84d; transform:rotate(45deg); }
+.service-faq-list details>p { max-width:760px; padding:0 4.8rem 1.45rem 1.5rem; margin:0; color:#afbec2; font-size:.8rem; }
+
+.home-service-promotion { position:fixed; left:1.35rem; bottom:1.35rem; z-index:72; width:min(520px,calc(100vw - 2.7rem)); display:grid; grid-template-columns:160px minmax(0,1fr); overflow:hidden; border:1px solid rgba(255,255,255,.2); border-radius:18px; background:#fff; box-shadow:0 25px 70px rgba(3,31,40,.34); animation:service-promotion-enter .42s var(--ease); }
+.home-service-promotion-close { position:absolute; z-index:2; top:.65rem; right:.65rem; width:34px; height:34px; display:grid; place-items:center; padding:0; border:1px solid rgba(7,59,76,.12); border-radius:50%; color:var(--teal); background:rgba(255,255,255,.94); cursor:pointer; box-shadow:0 5px 18px rgba(0,0,0,.12); }
+.home-service-promotion-close svg { width:17px; }
+.home-service-promotion-image { position:relative; min-height:210px; background-position:center; background-size:cover; }
+.home-service-promotion-image::after { content:""; position:absolute; inset:0; background:linear-gradient(180deg,rgba(4,38,49,.05),rgba(4,38,49,.76)); }
+.home-service-promotion-image>span { position:absolute; z-index:1; left:.8rem; right:.8rem; bottom:.8rem; color:#f9d66f; font-size:.62rem; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+.home-service-promotion-copy { min-width:0; display:flex; flex-direction:column; justify-content:center; padding:1.35rem 3.2rem 1.35rem 1.25rem; }
+.home-service-promotion-copy .eyebrow { font-size:.58rem; }
+.home-service-promotion-copy h2 { margin:.4rem 0 .35rem; color:var(--teal); font-size:1.35rem; line-height:1.1; }
+.home-service-promotion-copy p { margin:0 0 .9rem; color:#5c7178; font-size:.69rem; line-height:1.5; }
+.home-service-promotion-copy>div { display:flex; align-items:center; flex-wrap:wrap; gap:.8rem; }
+.home-service-promotion-copy .button { min-height:39px; padding:.5rem .75rem; font-size:.69rem; }
+.home-service-promotion-copy .button svg { width:15px; }
+.home-service-promotion-apply { color:var(--teal); font-size:.7rem; font-weight:900; text-decoration:underline; text-underline-offset:3px; }
+.home-service-promotion-progress { position:absolute; left:0; bottom:0; width:100%; height:4px; background:var(--gold); transform-origin:left; animation:service-promotion-progress 7.6s linear forwards; }
+@keyframes service-promotion-enter { from { opacity:0; transform:translateY(20px) scale(.98); } to { opacity:1; transform:none; } }
+@keyframes service-promotion-progress { from { transform:scaleX(1); } to { transform:scaleX(0); } }
 
 @media (max-width:800px) {
   .service-action-grid { grid-template-columns:1fr; }
@@ -369,6 +402,9 @@ p { color:var(--muted); line-height:1.75; }
   .service-facts>section,.service-facts>section:first-child,.service-facts>section:last-child { padding:1.6rem 0; border-right:0; border-bottom:1px solid #cfdbde; }
   .service-facts>section:last-child { border-bottom:0; }
   .service-facts h2 { min-height:0; }
+  .service-faq-shell { grid-template-columns:1fr; gap:2rem; }
+  .service-faq-heading { position:static; }
+  .service-faq-heading p { max-width:620px; }
 }
 @media (max-width:560px) {
   .service-detail-hero { padding-top:1.5rem; }
@@ -383,6 +419,15 @@ p { color:var(--muted); line-height:1.75; }
   .application-next-steps span { text-align:left; }
   .application-next-steps span::before { content:"✓"; display:inline-grid; place-items:center; width:22px; height:22px; margin-right:.55rem; border-radius:50%; color:white; background:#16875b; }
   .application-success-actions .button { width:100%; }
+  .service-faq-list summary { min-height:74px; padding:1rem; font-size:.9rem; }
+  .service-faq-list details>p { padding:0 3.4rem 1.1rem 1rem; font-size:.74rem; }
+  .home-service-promotion { left:.65rem; right:.65rem; bottom:4.75rem; width:auto; grid-template-columns:105px minmax(0,1fr); border-radius:14px; }
+  .home-service-promotion-image { min-height:178px; }
+  .home-service-promotion-copy { padding:1rem 2.55rem 1rem .9rem; }
+  .home-service-promotion-copy h2 { font-size:1.05rem; }
+  .home-service-promotion-copy p { display:-webkit-box; overflow:hidden; margin-bottom:.65rem; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+  .home-service-promotion-copy>div { gap:.55rem; }
+  .home-service-promotion-copy .button { min-height:36px; padding:.42rem .6rem; }
 }
 
 /* Verified company details and restrained footer credit */

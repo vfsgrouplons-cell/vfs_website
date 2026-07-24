@@ -47,6 +47,21 @@ export function ServiceDetailPage() {
         <Link className="inline-link" to="/services">Explore another service <ArrowRight/></Link>
       </div>
     </section>
+    {item.faqs?.length > 0 && <section className="section service-faq-section">
+      <div className="shell service-faq-shell">
+        <div className="service-faq-heading">
+          <span className="eyebrow">About {item.name}</span>
+          <h2>Common Questions</h2>
+          <p>Simple answers to questions customers often ask before taking the next step.</p>
+        </div>
+        <div className="service-faq-list">
+          {item.faqs.map((faq) => <details key={faq.question}>
+            <summary><span>{faq.question}</span><b className="service-faq-toggle" aria-hidden="true">+</b></summary>
+            <p>{faq.answer}</p>
+          </details>)}
+        </div>
+      </div>
+    </section>}
   </>;
 }
 

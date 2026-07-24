@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   TrendingUp,
   Users,
+  X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -54,6 +55,11 @@ const steps = [
 ];
 
 const callbackDefaults = { name: '', mobile: '', service: '', preferredTime: '', consent: false, website: '' };
+const promotionImages = {
+  Loans: '/services/loans.webp',
+  Insurance: '/services/insurance.webp',
+  'Wealth & Investments': '/services/investments.webp',
+};
 
 export function HomePage() {
   const services = useQuery({ queryKey: ['services'], queryFn: async () => (await api.get('/services')).data.data });
@@ -62,6 +68,30 @@ export function HomePage() {
   const [processRef, processVisible] = useRevealOnce();
   const grouped = useMemo(() => groupServices(services.data || []), [services.data]);
   const marqueeServices = useMemo(() => interleaveServices(grouped), [grouped]);
+  const [promotionIndex, setPromotionIndex] = useState(0);
+  const [promotionOpen, setPromotionOpen] = useState(false);
+  const serviceCount = services.data?.length || 0;
+
+  useEffect(() => {
+    if (!serviceCount) return undefined;
+    const firstPromotion = window.setTimeout(() => setPromotionOpen(true), 1200);
+    const rotation = window.setInterval(() => {
+      setPromotionIndex((current) => (current + 1) % serviceCount);
+      setPromotionOpen(true);
+    }, 10000);
+    return () => {
+      window.clearTimeout(firstPromotion);
+      window.clearInterval(rotation);
+    };
+  }, [serviceCount]);
+
+  useEffect(() => {
+    if (!promotionOpen) return undefined;
+    const autoClose = window.setTimeout(() => setPromotionOpen(false), 7600);
+    return () => window.clearTimeout(autoClose);
+  }, [promotionIndex, promotionOpen]);
+
+  const promotedService = serviceCount ? services.data[promotionIndex % serviceCount] : null;
 
   return <>
     <Seo
@@ -178,6 +208,8 @@ export function HomePage() {
     <section className="final-cta">
       <div className="shell"><div><span className="eyebrow">Your financial growth, our commitment</span><h2>Ready to discuss your financial goal?</h2></div><div className="button-row"><a className="button button-gold" href="#request-callback">Request a callback</a><Link className="button button-light" to="/services">View all services</Link></div></div>
     </section>
+
+    {promotionOpen && promotedService && <HomeServicePromotion service={promotedService} onClose={() => setPromotionOpen(false)}/>}
   </>;
 }
 
@@ -245,6 +277,26 @@ function MarqueeGroup({ services, duplicate = false }) {
     const content = <><Icon/><span><strong>{service.name}</strong><small>{service.category}</small></span><i>•</i></>;
     return duplicate ? <span className="home-marquee-item" key={service._id}>{content}</span> : <Link className="home-marquee-item" to={`/services/${service.slug}`} key={service._id}>{content}</Link>;
   })}</div>;
+}
+
+function HomeServicePromotion({ service, onClose }) {
+  const image = promotionImages[service.category] || promotionImages.Loans;
+  return <aside className="home-service-promotion" role="dialog" aria-live="polite" aria-label={`${service.name} from VFS Groups`}>
+    <button className="home-service-promotion-close" type="button" onClick={onClose} aria-label="Close service update"><X/></button>
+    <div className="home-service-promotion-image" style={{ backgroundImage: `url(${image})` }} aria-hidden="true">
+      <span>{service.category}</span>
+    </div>
+    <div className="home-service-promotion-copy">
+      <span className="eyebrow">Explore a VFS service</span>
+      <h2>{service.name}</h2>
+      <p>{service.shortDescription}</p>
+      <div>
+        <Link className="button button-gold" to={`/services/${service.slug}`}>View service <ArrowRight/></Link>
+        <Link className="home-service-promotion-apply" to={`/apply?service=${service.slug}`}>Apply now</Link>
+      </div>
+    </div>
+    <span className="home-service-promotion-progress" aria-hidden="true"/>
+  </aside>;
 }
 
 function groupServices(services) {
